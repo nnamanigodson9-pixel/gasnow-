@@ -1,0 +1,1164 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width,initial-scale=1.0"/>
+<title>GasNow — Asaba's #1 LPG Delivery</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/react/18.2.0/umd/react.production.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/react-dom/18.2.0/umd/react-dom.production.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/babel-standalone/7.23.2/babel.min.js"></script>
+<script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-auth-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-firestore-compat.js"></script>
+<script>
+try{
+  firebase.initializeApp({apiKey:"AIzaSyB6Jm05vRItv99jG924nn4ZPRemudFrSx4",authDomain:"gasnow-asaba.firebaseapp.com",projectId:"gasnow-asaba",storageBucket:"gasnow-asaba.firebasestorage.app",messagingSenderId:"586189445022",appId:"1:586189445022:web:74d854d41d8718c3e4e88f"});
+  window._auth=firebase.auth();
+  window._db=firebase.firestore();
+  window._fbOk=true;
+  console.log("Firebase connected!");
+}catch(e){window._fbOk=false;}
+window.fbSaveOrder=async function(o){if(!window._db)return null;try{const r=await window._db.collection("orders").add({...o,createdAt:firebase.firestore.FieldValue.serverTimestamp()});return r.id;}catch(e){return null;}};
+window.fbSaveComment=async function(c){if(!window._db)return;try{await window._db.collection("comments").add({...c,createdAt:firebase.firestore.FieldValue.serverTimestamp()});}catch(e){}};
+</script>
+<style>
+*{box-sizing:border-box;margin:0;padding:0}
+body{font-family:'Segoe UI',system-ui,sans-serif;background:#0f172a;display:flex;justify-content:center;min-height:100vh}
+#root{width:100%;max-width:430px;min-height:100vh;background:#f8fafc}
+input,textarea,select,button{font-family:inherit}
+.card{background:#fff;border-radius:16px;box-shadow:0 1px 3px rgba(0,0,0,.08)}
+.bar{height:8px;border-radius:6px;background:#e2e8f0;overflow:hidden;margin-top:4px}
+.bar-fill{height:100%;border-radius:6px;background:linear-gradient(90deg,#ea580c,#dc2626);transition:width .6s}
+@keyframes pulse{0%,100%{opacity:1}50%{opacity:.4}}.pulse{animation:pulse 1.5s infinite}
+@keyframes fadeIn{from{opacity:0;transform:translateY(8px)}to{opacity:1;transform:translateY(0)}}.fadeIn{animation:fadeIn .3s ease}
+@keyframes slideUp{from{transform:translateY(100%)}to{transform:translateY(0)}}.slideUp{animation:slideUp .35s cubic-bezier(.32,.72,0,1)}
+</style>
+</head>
+<body>
+<div id="root"></div>
+<script type="text/babel">
+const {useState,useEffect,useRef}=React;
+const SUPPORT="09033304096";
+const APP_URL="https://gasnow.ng";
+const LOYALTY=0.02;
+const BRAND="#ea580c";
+const BRAND_DARK="#c2410c";
+const BG="linear-gradient(135deg,#ea580c,#dc2626)";
+
+const AREAS=["Okpanam Road","Cable Point","GRA","Infant Jesus","Summit","Anwai Road",
+  "Ogbeogonogo Market","Nnebisi Road","DBS Road","Asaba Township","Bonsaac","Umuagu",
+  "Okwe","Ibusa Road","Mariam Estate","Airport Road","Isieke","Okwuzu","Ugbolu",
+  "Okpanam Town","Illah Road","Ezenei Avenue","West End","Kings Court",
+  "Trans-Nkisi","Oshimili South","Asaba Estate","Akwukwu Road"];
+
+const CYLS=[
+  {id:1,kg:3,   lb:"3kg",   icon:"🔵",desc:"Solo / Backup",        prem:false},
+  {id:2,kg:5,   lb:"5kg",   icon:"🟡",desc:"1–2 persons",          prem:false},
+  {id:3,kg:6,   lb:"6kg",   icon:"🟢",desc:"Small family",         prem:false},
+  {id:4,kg:10,  lb:"10kg",  icon:"🟠",desc:"Medium family",        prem:false},
+  {id:5,kg:12.5,lb:"12.5kg",icon:"🔴",desc:"Family — Free delivery",prem:true},
+  {id:6,kg:25,  lb:"25kg",  icon:"⚫",desc:"Commercial — Free delivery",prem:true},
+  {id:7,kg:50,  lb:"50kg",  icon:"🟤",desc:"Industrial — Free delivery",prem:true},
+];
+
+const RIDERS=[
+  {name:"Emeka Okafor",  phone:"08111111111",area:"GRA / Cable Point",   zones:["GRA","Cable Point","Mariam Estate","Kings Court","Airport Road"],lat:6.1980,lng:6.7340,active:true},
+  {name:"Chidi Nwosu",   phone:"08122222222",area:"Summit / Okpanam Rd", zones:["Summit","Okpanam Road","Okpanam Town","Airport Road"],lat:6.2100,lng:6.7200,active:true},
+  {name:"Ifeanyi Eze",   phone:"08133333333",area:"Nnebisi / DBS Road",  zones:["Nnebisi Road","DBS Road","Asaba Township","Ezenei Avenue","West End"],lat:6.1900,lng:6.7310,active:true},
+  {name:"Blessing Obi",  phone:"08144444444",area:"Ogbeogonogo / Anwai", zones:["Ogbeogonogo Market","Anwai Road","Ibusa Road","Akwukwu Road"],lat:6.1850,lng:6.7280,active:true},
+  {name:"Kenneth Ibe",   phone:"08155555555",area:"Infant Jesus / Isieke",zones:["Infant Jesus","Isieke","Okwuzu","Umuagu","Bonsaac"],lat:6.2050,lng:6.7360,active:true},
+  {name:"Chibuzor Adams",phone:"08166666666",area:"Trans-Nkisi / Bonsaac",zones:["Trans-Nkisi","Bonsaac","Oshimili South","Ugbolu"],lat:6.1920,lng:6.7250,active:true},
+  {name:"Tochukwu Madu", phone:"08177777777",area:"Okwe / Illah Road",   zones:["Okwe","Illah Road","Asaba Estate","Ugbolu"],lat:6.1780,lng:6.7200,active:false},
+  {name:"Ada Okonkwo",   phone:"08188888888",area:"DBS / Ezenei Ave",    zones:["DBS Road","Ezenei Avenue","West End","Okpanam Road"],lat:6.1960,lng:6.7300,active:true},
+  {name:"Obinna Chuka",  phone:"08199999999",area:"Asaba Township",      zones:["Asaba Township","Nnebisi Road","Ogbeogonogo Market","Trans-Nkisi"],lat:6.1940,lng:6.7320,active:true},
+  {name:"Chioma Nze",    phone:"08100000001",area:"Kings Court / GRA",   zones:["Kings Court","GRA","Mariam Estate","Cable Point"],lat:6.2000,lng:6.7350,active:true},
+];
+
+const ACCS=[
+  {name:"Gas Regulator",  price:2500,icon:"🔧",desc:"Heavy-duty brass regulator"},
+  {name:"Gas Hose 1.5m",  price:1800,icon:"🌀",desc:"High-pressure reinforced hose"},
+  {name:"Burner Head",    price:4500,icon:"🔩",desc:"Commercial-grade burner"},
+  {name:"Cylinder Clip",  price:500, icon:"📎",desc:"Safety clip & seal"},
+  {name:"Pressure Gauge", price:3200,icon:"🎯",desc:"Precision pressure gauge"},
+  {name:"Safety Valve",   price:1200,icon:"🛡️",desc:"Automatic pressure relief"},
+  {name:"Cylinder Stand", price:2800,icon:"🪣",desc:"Anti-tip steel stand"},
+];
+
+const PROMOS={
+  "ASABA10":  {disc:10,label:"10% Asaba launch discount"},
+  "FIRSTGAS": {disc:15,label:"15% off your first order"},
+  "FAMILY5":  {disc:5, label:"5% family & friends discount"},
+  "GASNOW20": {disc:20,label:"20% flash sale — today only"},
+};
+
+const USER_STORE={
+  "ada@gmail.com":    {name:"Ada Obi",     phone:"08012345678",pass:"ada123",  wallet:1500,refCode:"ADA0001",refs:2,area:"GRA"},
+  "chidi@gmail.com":  {name:"Chidi Nwosu", phone:"07098765432",pass:"chidi456",wallet:500, refCode:"CHID002",refs:0,area:"Nnebisi Road"},
+  "ngozi@gmail.com":  {name:"Ngozi Eze",   phone:"09011223344",pass:"ngozi789",wallet:800, refCode:"NGOZ003",refs:1,area:"Cable Point"},
+  "emeka@gmail.com":  {name:"Emeka Obi",   phone:"08122334455",pass:"emeka111",wallet:300, refCode:"EMEK004",refs:0,area:"Summit"},
+  "ifeoma@gmail.com": {name:"Ifeoma Dike", phone:"08033445566",pass:"ifeoma22",wallet:700, refCode:"IFEO005",refs:3,area:"Infant Jesus"},
+};
+
+const INIT_ORDERS=[
+  {id:"GN-001",kg:12.5,qty:1,status:"Delivered", customer:"Ada Obi",    phone:"08012345678",address:"14 Oguta Road, GRA",        area:"GRA",          rider:"Emeka Okafor",  date:"Jun 18",rating:5,  total:10000,wasSent:true, prem:true},
+  {id:"GN-002",kg:5,   qty:2,status:"On the Way",customer:"Chidi Nwosu",phone:"07098765432",address:"Block 3 Nnebisi Road",      area:"Nnebisi Road",  rider:"Ifeanyi Eze",   date:"Jun 20",rating:null,total:8000, wasSent:true, prem:false},
+  {id:"GN-003",kg:6,   qty:1,status:"Pending",   customer:"Ngozi Eze",  phone:"09011223344",address:"5 Cable Point Street",      area:"Cable Point",   rider:"Unassigned",    date:"Jun 22",rating:null,total:4800, wasSent:false,prem:false},
+  {id:"GN-004",kg:12.5,qty:1,status:"Delivered", customer:"Ada Obi",    phone:"08012345678",address:"14 Oguta Road, GRA",        area:"GRA",          rider:"Emeka Okafor",  date:"Jun 10",rating:4,  total:10000,wasSent:true, prem:true},
+  {id:"GN-005",kg:25,  qty:1,status:"Delivered", customer:"Emeka Obi",  phone:"08122334455",address:"7 Summit Road",             area:"Summit",       rider:"Chidi Nwosu",   date:"Jun 5", rating:5,  total:20000,wasSent:true, prem:true},
+  {id:"GN-006",kg:5,   qty:1,status:"Delivered", customer:"Ifeoma Dike",phone:"08033445566",address:"Infant Jesus Area",         area:"Infant Jesus", rider:"Kenneth Ibe",   date:"Jun 1", rating:3,  total:4000, wasSent:true, prem:false},
+  {id:"GN-007",kg:10,  qty:2,status:"Confirmed", customer:"Chidi Nwosu",phone:"07098765432",address:"DBS Road Junction, Asaba",  area:"DBS Road",     rider:"Ifeanyi Eze",   date:"Jun 23",rating:null,total:16000,wasSent:true, prem:false},
+];
+
+const INIT_COMMENTS=[
+  {id:1,author:"Ada Obi",    av:"A",time:"Jun 18, 10:30am",msg:"Very fast delivery to GRA! Emeka was professional and polite. 5 stars!",reply:"Thank you Ada! We are committed to excellence across Asaba 🔥",rTime:"Jun 18, 11am"},
+  {id:2,author:"Chidi Nwosu",av:"C",time:"Jun 20, 2:15pm", msg:"Can you add 50kg cylinders for my restaurant on Nnebisi Road?",reply:"Hello Chidi! 50kg commercial cylinders are now available. Call us for bulk delivery pricing!",rTime:"Jun 20, 3pm"},
+  {id:3,author:"Ngozi Eze",  av:"N",time:"Jun 22, 9:00am", msg:"Ordered at 8am from Cable Point, gas reached by 9:30am. Amazing!",reply:null,rTime:null},
+];
+
+const SC={Pending:{bg:"#fef9c3",c:"#854d0e"},Confirmed:{bg:"#dbeafe",c:"#1e40af"},"On the Way":{bg:"#f3e8ff",c:"#6b21a8"},Delivered:{bg:"#dcfce7",c:"#14532d"},Cancelled:{bg:"#fee2e2",c:"#7f1d1d"}};
+const WEEK=[{d:"Mon",r:28500,o:5},{d:"Tue",r:37000,o:7},{d:"Wed",r:19500,o:3},{d:"Thu",r:46000,o:8},{d:"Fri",r:55500,o:9},{d:"Sat",r:64000,o:11},{d:"Sun",r:32500,o:6}];
+
+const fmt=n=>"₦"+Number(n).toLocaleString();
+const calcP=(kg,ppk)=>Math.round(kg*ppk);
+const fmtDate=()=>new Date().toLocaleDateString("en-NG",{day:"2-digit",month:"short",year:"numeric"});
+const fmtTime=()=>new Date().toLocaleTimeString("en-NG",{hour:"2-digit",minute:"2-digit"});
+const genCode=name=>name.toUpperCase().replace(/\s/g,"").slice(0,5)+(Math.floor(Math.random()*900)+100);
+const suggestRider=area=>{
+  if(!area)return RIDERS.filter(r=>r.active)[0];
+  const m=RIDERS.filter(r=>r.active&&r.zones.some(z=>area.toLowerCase().includes(z.toLowerCase())||z.toLowerCase().includes(area.toLowerCase())));
+  return m.length>0?m[0]:RIDERS.filter(r=>r.active)[0];
+};
+const waOpen=(phone,msg)=>{const n=String(phone).replace(/\D/g,"").replace(/^0/,"234");window.open("https://wa.me/"+n+"?text="+encodeURIComponent(msg),"_blank");};
+const copyText=(text,cb)=>{
+  const fb=()=>{const el=document.createElement("textarea");el.value=text;el.style.cssText="position:fixed;opacity:0";document.body.appendChild(el);el.focus();el.select();try{document.execCommand("copy");cb&&cb();}catch(e){}document.body.removeChild(el);};
+  if(navigator.clipboard&&window.isSecureContext){navigator.clipboard.writeText(text).then(()=>cb&&cb()).catch(fb);}else fb();
+};
+
+const Pill=({s})=>{const x=SC[s]||{bg:"#f1f5f9",c:"#475569"};return<span style={{padding:"3px 10px",borderRadius:20,fontSize:10,fontWeight:700,background:x.bg,color:x.c}}>{s}</span>;};
+const Inp=({xtra={},...p})=><input {...p} style={{width:"100%",padding:"12px 14px",border:"1.5px solid #e2e8f0",borderRadius:12,fontSize:14,outline:"none",background:"#fff",color:"#0f172a",...xtra}} onFocus={e=>e.target.style.borderColor=BRAND} onBlur={e=>e.target.style.borderColor="#e2e8f0"}/>;
+const Lbl=({t,req})=><div style={{fontWeight:600,fontSize:11,color:"#64748b",marginBottom:5,marginTop:14,textTransform:"uppercase",letterSpacing:.5}}>{t}{req&&<span style={{color:"#ef4444",marginLeft:3}}>*</span>}</div>;
+const PBtn=({t,onClick,dark,bg,outline})=><button onClick={onClick} style={{width:"100%",padding:"15px",background:outline?"transparent":bg||(dark?"#0f172a":BG),color:outline?BRAND:"#fff",border:outline?"2px solid "+BRAND:"none",borderRadius:12,fontSize:15,fontWeight:800,cursor:"pointer",letterSpacing:.2}}>{t}</button>;
+const SBtn=({t,onClick,bg="#f1f5f9",c="#374151"})=><button onClick={onClick} style={{padding:"7px 11px",border:"none",borderRadius:8,fontWeight:700,fontSize:11,cursor:"pointer",background:bg,color:c}}>{t}</button>;
+
+function Toast({t}){if(!t)return null;const bg=t.type==="err"?"#dc2626":t.type==="info"?"#2563eb":"#059669";return<div className="fadeIn" style={{position:"fixed",top:20,left:"50%",transform:"translateX(-50%)",zIndex:9999,background:bg,color:"#fff",padding:"11px 20px",borderRadius:40,fontWeight:700,fontSize:13,maxWidth:"88vw",textAlign:"center",boxShadow:"0 8px 24px rgba(0,0,0,.2)"}}>{t.msg}</div>;}
+function Stars({val,onPick,sz=15}){return<div style={{display:"flex",gap:3}}>{[1,2,3,4,5].map(i=><span key={i} onClick={()=>onPick&&onPick(i)} style={{fontSize:sz,cursor:onPick?"pointer":"default",opacity:i<=val?1:.2}}>⭐</span>)}</div>;}
+function BarChart(){const mx=Math.max(...WEEK.map(d=>d.r));return<div className="card" style={{padding:16}}><div style={{fontSize:12,fontWeight:700,color:"#0f172a",marginBottom:12,textTransform:"uppercase",letterSpacing:.3}}>Weekly Revenue</div><div style={{display:"flex",gap:5,alignItems:"flex-end",height:80}}>{WEEK.map(d=><div key={d.d} style={{flex:1,display:"flex",flexDirection:"column",alignItems:"center",gap:4}}><div style={{width:"100%",background:BG,borderRadius:"4px 4px 0 0",height:Math.max(5,d.r/mx*70)+"px",opacity:.85}}/><div style={{fontSize:9,color:"#64748b",fontWeight:600}}>{d.d}</div></div>)}</div><div style={{marginTop:10,display:"flex",justifyContent:"space-between",fontSize:11,color:"#64748b"}}><span>Total: <b style={{color:BRAND}}>{fmt(WEEK.reduce((s,d)=>s+d.r,0))}</b></span><span>Orders: <b style={{color:BRAND}}>{WEEK.reduce((s,d)=>s+d.o,0)}</b></span></div></div>;}
+
+function ReceiptModal({o,ppk,onClose}){
+  const total=o.total||calcP(o.kg,ppk)*(o.qty||1);
+  const del=o.prem?0:500;
+  const rid="GNR-"+o.id.replace("GN-","");
+  const doPrint=()=>{
+    const win=window.open("","_blank","width=440,height=680");
+    if(!win){alert("Allow popups in your browser to print receipt");return;}
+    win.document.write('<!DOCTYPE html><html><head><title>GasNow Receipt '+o.id+'</title>'
+    +'<style>*{box-sizing:border-box;margin:0;padding:0}body{font-family:Segoe UI,Arial,sans-serif;max-width:380px;margin:0 auto;padding:28px;color:#0f172a;font-size:13px}'
+    +'.logo{font-size:24px;font-weight:900;color:#ea580c;text-align:center}.sub{text-align:center;font-size:10px;color:#64748b;margin-bottom:16px}'
+    +'hr{border:none;border-top:1.5px dashed #e2e8f0;margin:12px 0}.row{display:flex;justify-content:space-between;padding:5px 0}'
+    +'.lbl{color:#64748b}.total{display:flex;justify-content:space-between;padding:10px 0;font-size:16px;font-weight:900;border-top:2px solid #0f172a;margin-top:8px}'
+    +'.badge{display:inline-block;background:#ea580c;color:#fff;padding:4px 18px;border-radius:20px;font-size:11px;font-weight:800}'
+    +'.footer{font-size:10px;color:#94a3b8;text-align:center;margin-top:18px;line-height:1.8}</style></head><body>'
+    +'<div class="logo">🔥 GasNow Asaba</div>'
+    +'<div class="sub">Asaba\'s #1 LPG Delivery · Delta State<br/>'+SUPPORT+' · '+APP_URL+'</div>'
+    +'<hr/><div style="text-align:center;font-size:42px;margin:8px 0">✅</div>'
+    +'<div style="text-align:center;font-size:14px;font-weight:800;margin-bottom:6px">OFFICIAL RECEIPT</div>'
+    +'<div style="text-align:center;margin-bottom:14px"><span class="badge">PAID IN FULL</span></div><hr/>'
+    +'<div class="row"><span class="lbl">Receipt No.</span><b>'+rid+'</b></div>'
+    +'<div class="row"><span class="lbl">Order ID</span><b>'+o.id+'</b></div>'
+    +'<div class="row"><span class="lbl">Date & Time</span><b>'+fmtDate()+' · '+fmtTime()+'</b></div><hr/>'
+    +'<div class="row"><span class="lbl">Customer</span><b>'+o.customer+'</b></div>'
+    +'<div class="row"><span class="lbl">Phone</span><b>'+o.phone+'</b></div>'
+    +'<div class="row"><span class="lbl">Address</span><b>'+o.address+'</b></div>'
+    +'<div class="row"><span class="lbl">Area</span><b>'+o.area+', Asaba, Delta State</b></div>'
+    +'<div class="row"><span class="lbl">Rider</span><b>'+o.rider+'</b></div><hr/>'
+    +'<div class="row"><span class="lbl">Cylinder</span><b>'+o.kg+'kg LPG Cylinder</b></div>'
+    +'<div class="row"><span class="lbl">Unit Price</span><b>'+fmt(calcP(o.kg,ppk))+'</b></div>'
+    +'<div class="row"><span class="lbl">Quantity</span><b>x'+(o.qty||1)+'</b></div>'
+    +'<div class="row"><span class="lbl">Delivery Fee</span><b>'+(del===0?"FREE":"₦500")+'</b></div>'
+    +'<div class="total"><span>TOTAL PAID</span><span style="color:#ea580c">'+fmt(total)+'</span></div><hr/>'
+    +'<div class="footer">Thank you for choosing GasNow Asaba! 🔥<br/>This is your official payment receipt. Keep it safe.<br/>'+SUPPORT+' · '+APP_URL+'</div>'
+    +'<script>window.onload=function(){window.print();setTimeout(function(){window.close();},1500);}<\/script></body></html>');
+    win.document.close();
+  };
+  return(
+    <div style={{position:"fixed",inset:0,background:"rgba(15,23,42,.7)",zIndex:1000,display:"flex",alignItems:"flex-end",justifyContent:"center",backdropFilter:"blur(4px)"}} onClick={onClose}>
+      <div className="slideUp" style={{background:"#fff",width:"100%",maxWidth:430,borderRadius:"24px 24px 0 0",maxHeight:"90vh",overflowY:"auto",paddingBottom:28}} onClick={e=>e.stopPropagation()}>
+        <div style={{background:BG,padding:"18px 20px",borderRadius:"24px 24px 0 0",display:"flex",justifyContent:"space-between",alignItems:"center"}}>
+          <div style={{color:"#fff"}}><div style={{fontWeight:900,fontSize:17}}>🔥 GasNow Receipt</div><div style={{fontSize:11,opacity:.8,marginTop:1}}>{rid} · Asaba, Delta State</div></div>
+          <button onClick={onClose} style={{background:"rgba(255,255,255,.2)",border:"none",color:"#fff",borderRadius:10,padding:"6px 14px",cursor:"pointer",fontWeight:700}}>✕ Close</button>
+        </div>
+        <div style={{padding:"20px 20px 0"}}>
+          <div style={{textAlign:"center",marginBottom:18,padding:"20px 0",background:"linear-gradient(135deg,#f0fdf4,#dcfce7)",borderRadius:16}}>
+            <div style={{fontSize:48,marginBottom:6}}>✅</div>
+            <div style={{fontWeight:900,fontSize:16,color:"#14532d"}}>PAYMENT CONFIRMED</div>
+            <div style={{marginTop:8}}><span style={{background:"#16a34a",color:"#fff",padding:"4px 18px",borderRadius:20,fontSize:11,fontWeight:800}}>PAID IN FULL</span></div>
+          </div>
+          {[["Receipt No.",rid],["Order ID",o.id],["Date",fmtDate()+" · "+fmtTime()],["Customer",o.customer],["Phone",o.phone],["Address",o.address],["Area",o.area+", Asaba"],["Rider",o.rider]].map(([k,v])=>(
+            <div key={k} style={{display:"flex",justifyContent:"space-between",padding:"7px 0",fontSize:13,borderBottom:"1px solid #f8fafc"}}><span style={{color:"#64748b"}}>{k}</span><b style={{textAlign:"right",maxWidth:"55%",color:"#0f172a"}}>{v}</b></div>
+          ))}
+          <div style={{height:8}}/>
+          {[["Cylinder",o.kg+"kg LPG"],["Unit Price",fmt(calcP(o.kg,ppk))],["Qty","x"+(o.qty||1)],["Delivery",o.prem?"FREE ✓":fmt(500)]].map(([k,v])=>(
+            <div key={k} style={{display:"flex",justifyContent:"space-between",padding:"7px 0",fontSize:13,borderBottom:"1px solid #f8fafc"}}><span style={{color:"#64748b"}}>{k}</span><b style={{color:v.includes("FREE")?"#16a34a":"#0f172a"}}>{v}</b></div>
+          ))}
+          <div style={{display:"flex",justifyContent:"space-between",padding:"14px 0 4px",fontSize:18,fontWeight:900,borderTop:"2px solid #0f172a",marginTop:4}}>
+            <span>TOTAL PAID</span><span style={{color:BRAND}}>{fmt(total)}</span>
+          </div>
+          <div style={{textAlign:"center",padding:"10px 0",fontSize:11,color:"#94a3b8"}}>Official receipt — GasNow Asaba · {SUPPORT}</div>
+        </div>
+        <div style={{padding:"12px 20px 0",display:"flex",gap:10}}>
+          <button onClick={doPrint} style={{flex:1,background:BG,color:"#fff",border:"none",borderRadius:12,padding:"14px",fontWeight:800,fontSize:14,cursor:"pointer"}}>🖨️ Print / Save PDF</button>
+          <button onClick={()=>waOpen(o.phone,"🧾 *GasNow Receipt — "+rid+"*\n\nOrder: "+o.id+"\nCylinder: "+o.kg+"kg x"+(o.qty||1)+"\nTotal Paid: "+fmt(total)+"\nDate: "+fmtDate()+"\nArea: "+o.area+", Asaba\n\nThank you! 🔥 "+APP_URL)} style={{flex:1,background:"#25D366",color:"#fff",border:"none",borderRadius:12,padding:"14px",fontWeight:800,fontSize:14,cursor:"pointer"}}>💬 WhatsApp</button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function GPSMap({order,onClose}){
+  const mapRef=useRef(null);const mapObj=useRef(null);const rMark=useRef(null);
+  const [eta,setEta]=useState(8);
+  const rider=RIDERS.find(r=>r.name===order.rider)||RIDERS[0];
+  const dLat=6.1980,dLng=6.7340;
+  useEffect(()=>{
+    if(mapObj.current||!mapRef.current)return;
+    const lnk=document.createElement("link");lnk.rel="stylesheet";lnk.href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css";document.head.appendChild(lnk);
+    const sc=document.createElement("script");sc.src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js";
+    sc.onload=()=>{
+      const L=window.L;
+      const map=L.map(mapRef.current,{zoomControl:false}).setView([rider.lat,rider.lng],14);
+      L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png",{attribution:"© OSM"}).addTo(map);
+      L.control.zoom({position:"bottomright"}).addTo(map);
+      L.marker([dLat,dLng],{icon:L.divIcon({html:"<div style='font-size:26px'>🏠</div>",iconSize:[28,28],className:""})}).addTo(map).bindPopup("<b>📍 Delivery: "+order.address+"</b>");
+      L.marker([6.2100,6.7150],{icon:L.divIcon({html:"<div style='font-size:26px'>🏪</div>",iconSize:[28,28],className:""})}).addTo(map).bindPopup("<b>🔥 GasNow Asaba Plant</b>");
+      const rm=L.marker([rider.lat,rider.lng],{icon:L.divIcon({html:"<div style='font-size:28px'>🏍️</div>",iconSize:[30,30],className:""})}).addTo(map);
+      rm.bindPopup("<b>🏍️ "+order.rider+"</b><br/>📞 "+rider.phone).openPopup();
+      rMark.current=rm;mapObj.current=map;
+    };
+    document.body.appendChild(sc);
+  },[]);
+  useEffect(()=>{
+    let lat=rider.lat,lng=rider.lng;
+    const iv=setInterval(()=>{lat+=(dLat-lat)*0.06;lng+=(dLng-lng)*0.06;setEta(e=>Math.max(0,e-1));if(rMark.current&&mapObj.current){rMark.current.setLatLng([lat,lng]);mapObj.current.panTo([lat,lng],{animate:true,duration:.5});}},2000);
+    return()=>clearInterval(iv);
+  },[]);
+  return(
+    <div style={{position:"fixed",inset:0,zIndex:900,background:"#f8fafc",display:"flex",flexDirection:"column"}}>
+      <div style={{background:"#0f172a",padding:"14px 16px",display:"flex",justifyContent:"space-between",alignItems:"center"}}>
+        <div><div style={{color:"#fff",fontWeight:800,fontSize:15}}>📍 Live GPS Tracking — Asaba</div><div style={{color:"#475569",fontSize:11,marginTop:1}}>Real-time rider location</div></div>
+        <button onClick={onClose} style={{background:"rgba(255,255,255,.1)",border:"1px solid rgba(255,255,255,.15)",color:"#fff",borderRadius:10,padding:"6px 14px",cursor:"pointer",fontWeight:700}}>✕ Close</button>
+      </div>
+      <div ref={mapRef} style={{flex:1,minHeight:0}}/>
+      <div style={{background:"#fff",padding:16,borderTop:"1px solid #f1f5f9"}}>
+        <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:12}}>
+          <div><div style={{fontWeight:800,fontSize:15,color:"#0f172a"}}>🏍️ {order.rider}</div><div style={{fontSize:12,color:"#64748b",marginTop:1}}>{rider.area} · Asaba</div></div>
+          <div style={{textAlign:"right"}}><div style={{fontWeight:900,fontSize:22,color:BRAND}}>{eta} min</div><div style={{fontSize:10,color:"#94a3b8",textTransform:"uppercase",letterSpacing:.5}}>ETA</div></div>
+        </div>
+        <div style={{display:"flex",gap:8}}>
+          <a href={"tel:"+rider.phone} style={{flex:1,background:"#16a34a",color:"#fff",borderRadius:12,padding:"12px",fontWeight:800,fontSize:13,textDecoration:"none",textAlign:"center",display:"block"}}>📞 Call Rider</a>
+          <a href={"https://wa.me/234"+rider.phone.replace(/^0/,"")+"?text="+encodeURIComponent("Hi "+order.rider+"! I am waiting for my GasNow delivery in "+order.area+", Asaba. Order: "+order.id)} target="_blank" style={{flex:1,background:"#25D366",color:"#fff",borderRadius:12,padding:"12px",fontWeight:800,fontSize:13,textDecoration:"none",textAlign:"center",display:"block"}}>💬 WhatsApp</a>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function CardPayment({total,onSuccess,onCancel}){
+  const [f,setF]=useState({num:"",name:"",exp:"",cvv:""});
+  const [processing,setProcessing]=useState(false);
+  const [err,setErr]=useState("");
+  const up=k=>e=>{
+    let v=e.target.value;
+    if(k==="num")v=v.replace(/\D/g,"").slice(0,16).replace(/(.{4})/g,"$1 ").trim();
+    if(k==="exp")v=v.replace(/\D/g,"").slice(0,4).replace(/^(\d{2})(\d)/,"$1/$2");
+    if(k==="cvv")v=v.replace(/\D/g,"").slice(0,4);
+    setF(p=>({...p,[k]:v}));
+  };
+  const getCardBrand=num=>{const n=num.replace(/\s/g,"");if(/^4/.test(n))return{name:"Visa",color:"#1a1f71"};if(/^5[1-5]|^2[2-7]/.test(n))return{name:"Mastercard",color:"#eb001b"};if(/^6/.test(n))return{name:"Verve",color:"#00a651"};return{name:"Card",color:"#64748b"};};
+  const brand=getCardBrand(f.num);
+  const pay=()=>{
+    setErr("");
+    if(f.num.replace(/\s/g,"").length<16)return setErr("Enter a valid 16-digit card number");
+    if(!f.name.trim())return setErr("Enter the cardholder name as shown on card");
+    if(f.exp.length<5)return setErr("Enter a valid expiry date (MM/YY)");
+    if(f.cvv.length<3)return setErr("Enter your CVV (3 or 4 digits)");
+    const [mm]=f.exp.split("/");
+    if(parseInt(mm)>12||parseInt(mm)<1)return setErr("Invalid expiry month");
+    setProcessing(true);
+    setTimeout(()=>{setProcessing(false);onSuccess();},3000);
+  };
+  return(
+    <div style={{position:"fixed",inset:0,background:"rgba(15,23,42,.75)",zIndex:900,display:"flex",alignItems:"flex-end",justifyContent:"center",backdropFilter:"blur(4px)"}} onClick={e=>{if(e.target===e.currentTarget)onCancel();}}>
+      <div className="slideUp" style={{background:"#fff",width:"100%",maxWidth:430,borderRadius:"24px 24px 0 0",paddingBottom:28}} onClick={e=>e.stopPropagation()}>
+        <div style={{background:"#0f172a",padding:"18px 20px",borderRadius:"24px 24px 0 0",display:"flex",justifyContent:"space-between",alignItems:"center"}}>
+          <div><div style={{color:"#fff",fontWeight:900,fontSize:17}}>💳 Secure Card Payment</div><div style={{color:"#475569",fontSize:11,marginTop:1}}>🔒 256-bit SSL encrypted · Asaba</div></div>
+          <button onClick={onCancel} style={{background:"rgba(255,255,255,.1)",border:"none",color:"#94a3b8",borderRadius:10,padding:"6px 12px",cursor:"pointer",fontWeight:700}}>✕</button>
+        </div>
+        <div style={{padding:"20px 20px 0"}}>
+          {/* Card visual */}
+          <div style={{background:"linear-gradient(135deg,#0f172a,#1e293b)",borderRadius:18,padding:"22px",marginBottom:20,position:"relative",overflow:"hidden",minHeight:130}}>
+            <div style={{position:"absolute",top:-25,right:-25,width:120,height:120,borderRadius:"50%",background:"rgba(234,88,12,.15)"}}/>
+            <div style={{position:"absolute",bottom:-35,left:-15,width:130,height:130,borderRadius:"50%",background:"rgba(255,255,255,.04)"}}/>
+            <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",marginBottom:18}}>
+              <div style={{fontSize:22}}>🔥</div>
+              <div style={{fontWeight:800,fontSize:13,color:brand.color,background:"rgba(255,255,255,.08)",padding:"3px 10px",borderRadius:20}}>{brand.name}</div>
+            </div>
+            <div style={{color:"#e2e8f0",fontSize:17,fontWeight:700,letterSpacing:3,marginBottom:14,fontFamily:"monospace"}}>{f.num||"•••• •••• •••• ••••"}</div>
+            <div style={{display:"flex",justifyContent:"space-between"}}>
+              <div><div style={{color:"#475569",fontSize:9,textTransform:"uppercase",letterSpacing:1}}>Cardholder</div><div style={{color:"#e2e8f0",fontSize:12,fontWeight:700,marginTop:2}}>{f.name.toUpperCase()||"YOUR NAME"}</div></div>
+              <div style={{textAlign:"right"}}><div style={{color:"#475569",fontSize:9,textTransform:"uppercase",letterSpacing:1}}>Expires</div><div style={{color:"#e2e8f0",fontSize:12,fontWeight:700,marginTop:2}}>{f.exp||"MM/YY"}</div></div>
+            </div>
+          </div>
+          <Lbl t="Card Number" req/><Inp value={f.num} onChange={up("num")} placeholder="0000 0000 0000 0000" type="tel" xtra={{fontFamily:"monospace",fontSize:16,letterSpacing:1}}/>
+          <Lbl t="Cardholder Name" req/><Inp value={f.name} onChange={up("name")} placeholder="As shown on your card" xtra={{textTransform:"uppercase"}}/>
+          <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:12}}>
+            <div><Lbl t="Expiry Date" req/><Inp value={f.exp} onChange={up("exp")} placeholder="MM/YY" type="tel"/></div>
+            <div><Lbl t="CVV" req/><Inp value={f.cvv} onChange={up("cvv")} placeholder="•••" type="password" xtra={{letterSpacing:4}}/></div>
+          </div>
+          {err&&<div style={{color:"#dc2626",fontSize:12,margin:"10px 0",fontWeight:600,background:"#fef2f2",border:"1px solid #fecaca",borderRadius:10,padding:"9px 12px"}}>⚠️ {err}</div>}
+          <div style={{background:"#f8fafc",borderRadius:12,padding:"12px 14px",margin:"14px 0 16px",display:"flex",justifyContent:"space-between",alignItems:"center",border:"1px solid #e2e8f0"}}>
+            <span style={{color:"#475569",fontSize:14,fontWeight:600}}>Amount to charge</span>
+            <span style={{fontWeight:900,fontSize:18,color:BRAND}}>{fmt(total)}</span>
+          </div>
+          {processing?(
+            <div style={{textAlign:"center",padding:"16px 0"}}>
+              <div style={{fontSize:36,marginBottom:8}} className="pulse">🔒</div>
+              <div style={{fontWeight:700,color:"#0f172a",fontSize:14}}>Processing payment securely...</div>
+              <div style={{fontSize:12,color:"#64748b",marginTop:4}}>Please wait, do not close this screen</div>
+            </div>
+          ):(
+            <PBtn t={"🔒 Pay "+fmt(total)+" Securely"} onClick={pay}/>
+          )}
+          <div style={{display:"flex",justifyContent:"center",gap:10,marginTop:12,alignItems:"center"}}>
+            {["Visa","Mastercard","Verve"].map(b=><span key={b} style={{fontSize:10,color:"#94a3b8",fontWeight:700,background:"#f1f5f9",padding:"3px 8px",borderRadius:6}}>{b}</span>)}
+          </div>
+          <div style={{textAlign:"center",fontSize:11,color:"#94a3b8",marginTop:8}}>🔒 Your card details are encrypted and never stored</div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function Auth({onLogin}){
+  const [role,setRole]=useState(null);
+  const [mode,setMode]=useState("login");
+  const [f,setF]=useState({name:"",email:"",pass:"",phone:"",ref:"",area:""});
+  const [err,setErr]=useState("");
+  const [ok,setOk]=useState("");
+  const [showP,setShowP]=useState(false);
+  const up=k=>e=>setF(p=>({...p,[k]:e.target.value}));
+  const go=async()=>{
+    setErr("");setOk("");
+    if(mode==="reset"){if(!f.email.trim())return setErr("Enter your email address");return setOk("✅ Reset link sent to "+f.email);}
+    if(!f.email.trim()||!f.pass)return setErr("Please fill in your email and password");
+    if(role==="admin"){
+      if(window._auth&&window._fbOk){
+        try{
+          await window._auth.signInWithEmailAndPassword(f.email.trim(),f.pass);
+          return onLogin({name:"Admin",role:"admin",email:f.email,phone:"",wallet:0,refCode:"ADMIN",refs:0,area:""});
+        }catch(e){
+          const m={"auth/wrong-password":"Incorrect password.","auth/invalid-credential":"Incorrect email or password.","auth/user-not-found":"Admin email not found."};
+          return setErr(m[e.code]||e.message);
+        }
+      }else{if(f.email!=="admin@gasnow.ng"||f.pass!=="admin123")return setErr("Incorrect admin credentials");return onLogin({name:"Admin",role:"admin",email:f.email,phone:"",wallet:0,refCode:"ADMIN",refs:0,area:""});}
+    }
+    if(mode==="signup"){
+      if(!f.name.trim()||!f.phone.trim()||!f.area)return setErr("Please fill all required fields including your area");
+      if(f.pass.length<6)return setErr("Password must be at least 6 characters");
+      const k=f.email.toLowerCase().trim();
+      if(USER_STORE[k])return setErr("This email is already registered. Please sign in.");
+      let bonus=500;
+      if(f.ref.trim()){const ref=Object.values(USER_STORE).find(u=>u.refCode===f.ref.trim().toUpperCase());if(ref){ref.wallet=(ref.wallet||0)+500;ref.refs=(ref.refs||0)+1;bonus=1000;}else return setErr("Invalid referral code. Leave blank if you don't have one.");}
+      const code=genCode(f.name);
+      USER_STORE[k]={name:f.name.trim(),phone:f.phone.trim(),pass:f.pass,wallet:bonus,refCode:code,refs:0,area:f.area};
+      return onLogin({name:f.name.trim(),role:"customer",email:k,phone:f.phone.trim(),wallet:bonus,refCode:code,refs:0,area:f.area});
+    }
+    const k=f.email.toLowerCase().trim();
+    const u=USER_STORE[k];
+    if(!u)return setErr("Email not found. Please sign up first.");
+    if(u.pass!==f.pass)return setErr("Incorrect password. Tap 'Forgot Password?' below to reset.");
+    onLogin({name:u.name,role:"customer",email:k,phone:u.phone,wallet:u.wallet||500,refCode:u.refCode||genCode(u.name),refs:u.refs||0,area:u.area||""});
+  };
+  if(!role)return(
+    <div style={{minHeight:"100vh",background:"#0f172a",display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center",padding:24}}>
+      <div style={{width:"100%",maxWidth:340,textAlign:"center"}}>
+        <div style={{fontSize:72,marginBottom:8}}>🔥</div>
+        <h1 style={{color:"#fff",fontSize:32,fontWeight:900,margin:"0 0 2px",letterSpacing:-1}}>GasNow</h1>
+        <div style={{color:BRAND,fontSize:13,fontWeight:700,marginBottom:4}}>Asaba, Delta State</div>
+        <p style={{color:"#64748b",fontSize:13,marginBottom:10}}>Fast LPG cylinder delivery to your door</p>
+        <div style={{display:"flex",gap:6,justifyContent:"center",marginBottom:36}}>
+          {["⚡ Fast","🔒 Secure","💳 Easy Pay","📍 Asaba"].map(t=><span key={t} style={{background:"rgba(255,255,255,.06)",color:"#64748b",fontSize:11,fontWeight:600,padding:"4px 10px",borderRadius:20,border:"1px solid rgba(255,255,255,.08)"}}>{t}</span>)}
+        </div>
+        <div style={{display:"flex",flexDirection:"column",gap:12}}>
+          <PBtn t="👤 Order Gas — Get Started" onClick={()=>setRole("customer")}/>
+          <PBtn t="🛠️ Gas Plant Admin" onClick={()=>setRole("admin")} dark/>
+        </div>
+        <div style={{marginTop:24,background:"rgba(255,255,255,.04)",border:"1px solid rgba(255,255,255,.08)",borderRadius:14,padding:14,textAlign:"left"}}>
+          <div style={{fontWeight:700,color:"#475569",fontSize:10,textTransform:"uppercase",letterSpacing:.5,marginBottom:8}}>Demo Accounts</div>
+          <div style={{fontSize:11,color:"#475569",lineHeight:2.2}}>
+            📧 ada@gmail.com · <b style={{color:"#64748b"}}>ada123</b><br/>
+            📧 chidi@gmail.com · <b style={{color:"#64748b"}}>chidi456</b><br/>
+            📧 emeka@gmail.com · <b style={{color:"#64748b"}}>emeka111</b><br/>
+            🛠️ admin@gasnow.ng · <b style={{color:"#64748b"}}>admin123</b>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+  return(
+    <div style={{minHeight:"100vh",background:"#f8fafc"}}>
+      <div style={{background:role==="admin"?"#0f172a":BG,padding:"52px 24px 32px",textAlign:"center",color:"#fff",position:"relative"}}>
+        <button onClick={()=>{setRole(null);setErr("");setOk("");}} style={{position:"absolute",left:16,top:16,background:"rgba(255,255,255,.15)",border:"none",color:"#fff",borderRadius:10,padding:"6px 12px",cursor:"pointer",fontSize:12,fontWeight:600}}>← Back</button>
+        <div style={{fontSize:48,marginBottom:4}}>{role==="admin"?"🛠️":"🔥"}</div>
+        <h2 style={{margin:"0 0 4px",fontSize:22,fontWeight:900}}>{role==="admin"?"Admin Portal":mode==="reset"?"Reset Password":"GasNow Asaba"}</h2>
+        <p style={{margin:0,opacity:.75,fontSize:12}}>{mode==="reset"?"Enter your email to reset your password":mode==="login"?"Welcome back! Sign in to continue":"Create your free account"}</p>
+      </div>
+      <div style={{padding:"24px 20px"}}>
+        {role==="admin"&&<div style={{background:"#f0fdf4",border:"1px solid #bbf7d0",borderRadius:12,padding:"12px 14px",marginBottom:16,fontSize:12,color:"#14532d"}}>ℹ️ Demo: <b>admin@gasnow.ng</b> / <b>admin123</b></div>}
+        {role==="customer"&&mode!=="reset"&&<div style={{display:"flex",background:"#f1f5f9",borderRadius:12,padding:4,marginBottom:22}}>
+          {["login","signup"].map(m=><button key={m} onClick={()=>{setMode(m);setErr("");setOk("");}} style={{flex:1,padding:"11px",border:"none",cursor:"pointer",borderRadius:9,fontWeight:700,fontSize:13,background:mode===m?"#fff":"transparent",color:mode===m?BRAND:"#94a3b8",boxShadow:mode===m?"0 1px 3px rgba(0,0,0,.1)":"none"}}>{m==="login"?"Sign In":"Create Account"}</button>)}
+        </div>}
+        {mode==="reset"&&<>
+          <Lbl t="Email Address" req/><Inp value={f.email} onChange={up("email")} placeholder="your@email.com" type="email"/>
+          {ok&&<div style={{color:"#14532d",fontSize:12,margin:"12px 0",fontWeight:600,background:"#f0fdf4",border:"1px solid #bbf7d0",borderRadius:10,padding:"10px 12px"}}>{ok}</div>}
+          {err&&<div style={{color:"#dc2626",fontSize:12,margin:"10px 0",fontWeight:600,background:"#fef2f2",border:"1px solid #fecaca",borderRadius:10,padding:"10px 12px"}}>⚠️ {err}</div>}
+          <div style={{height:14}}/><PBtn t="Send Reset Link 📧" onClick={go}/>
+          <button onClick={()=>{setMode("login");setErr("");setOk("");}} style={{width:"100%",background:"none",border:"none",color:BRAND,fontWeight:700,fontSize:13,cursor:"pointer",marginTop:14}}>← Back to Sign In</button>
+        </>}
+        {mode==="signup"&&<>
+          <Lbl t="Full Name" req/><Inp value={f.name} onChange={up("name")} placeholder="Ada Obi"/>
+          <Lbl t="Phone Number" req/><Inp value={f.phone} onChange={up("phone")} placeholder="080 xxxx xxxx" type="tel"/>
+          <Lbl t="Your Area in Asaba" req/>
+          <select value={f.area} onChange={up("area")} style={{width:"100%",padding:"12px 14px",border:"1.5px solid #e2e8f0",borderRadius:12,fontSize:14,outline:"none",background:"#fff",color:f.area?"#0f172a":"#94a3b8",marginTop:0}}>
+            <option value="">— Select your area in Asaba —</option>
+            {AREAS.map(a=><option key={a} value={a}>{a}</option>)}
+          </select>
+          <Lbl t="Referral Code (optional)"/><Inp value={f.ref} onChange={up("ref")} placeholder="Enter code to get ₦1,000 bonus"/>
+        </>}
+        {mode!=="reset"&&<>
+          <Lbl t="Email Address" req/><Inp value={f.email} onChange={up("email")} placeholder="your@email.com" type="email"/>
+          <Lbl t="Password" req/>
+          <div style={{position:"relative",marginBottom:4}}>
+            <Inp value={f.pass} onChange={up("pass")} placeholder={mode==="signup"?"Minimum 6 characters":"Enter your password"} type={showP?"text":"password"} xtra={{paddingRight:48}}/>
+            <button onClick={()=>setShowP(v=>!v)} style={{position:"absolute",right:14,top:"50%",transform:"translateY(-50%)",background:"none",border:"none",cursor:"pointer",fontSize:16,color:"#94a3b8"}}>{showP?"🙈":"👁️"}</button>
+          </div>
+          {ok&&<div style={{color:"#14532d",fontSize:12,margin:"10px 0",fontWeight:600,background:"#f0fdf4",border:"1px solid #bbf7d0",borderRadius:10,padding:"10px 12px"}}>{ok}</div>}
+          {err&&<div style={{color:"#dc2626",fontSize:12,margin:"10px 0",fontWeight:600,background:"#fef2f2",border:"1px solid #fecaca",borderRadius:10,padding:"10px 12px"}}>⚠️ {err}</div>}
+          <div style={{height:16}}/><PBtn t={mode==="login"?"Sign In →":"Create Free Account 🎉"} onClick={go}/>
+          {mode==="login"&&role==="customer"&&<button onClick={()=>{setMode("reset");setErr("");setOk("");}} style={{width:"100%",background:"none",border:"none",color:BRAND,fontWeight:700,fontSize:13,cursor:"pointer",marginTop:14}}>🔑 Forgot Password?</button>}
+          {mode==="signup"&&<div style={{marginTop:14,background:"linear-gradient(135deg,#f0fdf4,#dcfce7)",border:"1px solid #bbf7d0",borderRadius:12,padding:"12px 14px",fontSize:12,color:"#14532d",textAlign:"center"}}>🎁 New accounts get <b>₦500 welcome credit</b>! Use a referral code to get <b>₦1,000</b>!</div>}
+        </>}
+      </div>
+    </div>
+  );
+}
+
+function Customer({user,onLogout,orders,setOrders,ppk,comments,setComments}){
+  const [scr,setScr]=useState("home");
+  const [gas,setGas]=useState(null);
+  const [qty,setQty]=useState(1);
+  const [addr,setAddr]=useState("");
+  const [area,setArea]=useState(user.area||"");
+  const [phone,setPhone]=useState(user.phone||"");
+  const [pay,setPay]=useState("transfer");
+  const [showCard,setShowCard]=useState(false);
+  const [slot,setSlot]=useState("morning");
+  const [prog,setProg]=useState(3);
+  const [rpos,setRpos]=useState(0);
+  const [wallet,setWallet]=useState(user.wallet||500);
+  const [useWal,setUseWal]=useState(false);
+  const [promo,setPromo]=useState("");
+  const [promoObj,setPromoObj]=useState(null);
+  const [sub,setSub]=useState(null);
+  const [rateId,setRateId]=useState(null);
+  const [rcptOrd,setRcptOrd]=useState(null);
+  const [showGPS,setShowGPS]=useState(false);
+  const [newCmt,setNewCmt]=useState("");
+  const [suggested,setSuggested]=useState(null);
+  const [notifs,setNotifs]=useState([
+    {msg:"👋 Welcome to GasNow Asaba! Your #1 LPG delivery service.",time:"Today",read:false},
+    {msg:"🎁 Order 12.5kg+ — FREE delivery + 2% wallet credit!",time:"Today",read:false},
+    {msg:"💰 ₦"+(user.wallet||500).toLocaleString()+" welcome credit in your wallet!",time:"Today",read:false},
+  ]);
+  const [showN,setShowN]=useState(false);
+  const [toast,setTst]=useState(null);
+  const ref=useRef();
+
+  const tst=(msg,type="ok")=>{setTst({msg,type});setTimeout(()=>setTst(null),3500);};
+  const addN=msg=>setNotifs(p=>[{msg,time:"Just now",read:false},...p]);
+  const unread=notifs.filter(n=>!n.read).length;
+  const myOrd=orders.filter(o=>o.customer===user.name);
+  const activeOrd=orders.find(o=>o.status==="On the Way");
+
+  const baseP=gas?calcP(gas.kg,ppk):0;
+  const delivery=gas&&gas.prem?0:500;
+  const bonus=gas&&gas.prem?Math.round(baseP*qty*LOYALTY):0;
+  const promoDisc=promoObj?Math.round(baseP*qty*promoObj.disc/100):0;
+  const walDisc=useWal?Math.min(wallet,baseP*qty):0;
+  const total=Math.max(0,baseP*qty+delivery-promoDisc-walDisc);
+
+  useEffect(()=>{if(area)setSuggested(suggestRider(area));},[area]);
+
+  const startTrack=()=>{setScr("track");setProg(3);setRpos(0);let p=0;ref.current=setInterval(()=>{p++;setRpos(p);if(p>=11){setProg(4);addN("🎉 Gas delivered in "+area+", Asaba!");tst("🎉 Delivered!");clearInterval(ref.current);}},650);};
+  useEffect(()=>()=>clearInterval(ref.current),[]);
+
+  const completeOrder=()=>{
+    if(useWal&&walDisc>0)setWallet(w=>w-walDisc);
+    if(bonus>0){setWallet(w=>w+bonus);addN("💰 "+fmt(bonus)+" loyalty credit added!");}
+    const rider=suggested||suggestRider(area);
+    const o={id:"GN-0"+(10+orders.length),kg:gas.kg,qty,status:"Pending",customer:user.name,phone,address:addr,area,rider:rider.name,date:fmtDate(),slot,rating:null,total,wasSent:false,prem:gas.prem};
+    setOrders(p=>[o,...p]);
+    addN("📦 Order "+o.id+" — Rider: "+rider.name);
+    tst("Order placed! "+rider.name+" assigned 🏍️");
+    setTimeout(()=>{
+      waOpen(phone,"🔥 *GasNow Asaba — Order Confirmed!*\n\nHello "+user.name+"!\n\n📦 Order: "+o.id+"\n🔴 Cylinder: "+gas.lb+" x"+qty+"\n💰 Total: "+fmt(total)+"\n📍 "+addr+", "+area+", Asaba\n🏍️ Rider: "+rider.name+" (📞 "+rider.phone+")\n🕐 Slot: "+slot+"\n\nTrack in the GasNow app!\n📞 Support: "+SUPPORT);
+      setOrders(p=>p.map(x=>x.id===o.id?{...x,wasSent:true,status:"Confirmed"}:x));
+      addN("✅ WhatsApp confirmation sent!");
+      setTimeout(()=>startTrack(),2000);
+    },1500);
+  };
+
+  const STEPS=["Order Placed","Confirmed","Rider Assigned","On the Way","Delivered"];
+  const SICO=["📋","✅","🏍️","📍","🎉"];
+  const SLOTS=[["morning","🌅","Morning","8am–12pm"],["afternoon","☀️","Afternoon","12pm–5pm"],["evening","🌇","Evening","5pm–8pm"]];
+  const SUBS=[{id:"weekly",lb:"Every Week",icon:"📅",disc:5},{id:"biweekly",lb:"Every 2 Weeks",icon:"🗓️",disc:3},{id:"monthly",lb:"Every Month",icon:"📆",disc:2}];
+
+  const hdrEl=(
+    <div style={{background:"#fff",padding:"12px 16px",display:"flex",justifyContent:"space-between",alignItems:"center",borderBottom:"1px solid #f1f5f9",position:"sticky",top:0,zIndex:100,boxShadow:"0 1px 4px rgba(0,0,0,.06)"}}>
+      <div style={{display:"flex",alignItems:"center",gap:10}}>
+        {scr!=="home"&&<button style={{background:"#f1f5f9",border:"none",width:34,height:34,borderRadius:10,cursor:"pointer",fontSize:16,display:"flex",alignItems:"center",justifyContent:"center"}} onClick={()=>setScr("home")}>←</button>}
+        <div><span style={{fontWeight:900,fontSize:17,color:"#0f172a"}}>🔥 GasNow</span><span style={{fontSize:10,color:"#94a3b8",marginLeft:5,fontWeight:600}}>Asaba</span></div>
+      </div>
+      <div style={{display:"flex",gap:8,alignItems:"center"}}>
+        <div onClick={()=>setScr("wallet")} style={{background:"linear-gradient(135deg,#f0fdf4,#dcfce7)",border:"1px solid #bbf7d0",borderRadius:10,padding:"5px 10px",fontSize:11,fontWeight:800,color:"#15803d",cursor:"pointer"}}>💰 {fmt(wallet)}</div>
+        <button onClick={()=>{setShowN(v=>!v);setNotifs(p=>p.map(n=>({...n,read:true})));}} style={{background:"#f1f5f9",border:"none",width:36,height:36,borderRadius:10,cursor:"pointer",fontSize:16,position:"relative",display:"flex",alignItems:"center",justifyContent:"center"}}>
+          🔔{unread>0&&<span style={{position:"absolute",top:4,right:4,background:"#ef4444",color:"#fff",fontSize:8,fontWeight:800,borderRadius:"50%",width:14,height:14,display:"flex",alignItems:"center",justifyContent:"center"}}>{unread}</span>}
+        </button>
+        <div style={{width:34,height:34,borderRadius:10,background:BG,color:"#fff",fontWeight:800,fontSize:14,display:"flex",alignItems:"center",justifyContent:"center"}}>{user.name[0]}</div>
+      </div>
+    </div>
+  );
+
+  return(
+    <div style={{minHeight:"100vh",background:"#f8fafc",paddingBottom:72}}>
+      <Toast t={toast}/>
+      {rcptOrd&&<ReceiptModal o={rcptOrd} ppk={ppk} onClose={()=>setRcptOrd(null)}/>}
+      {showGPS&&activeOrd&&<GPSMap order={activeOrd} onClose={()=>setShowGPS(false)}/>}
+      {showCard&&<CardPayment total={total} onSuccess={()=>{setShowCard(false);completeOrder();}} onCancel={()=>setShowCard(false)}/>}
+
+      {showN&&<div style={{position:"fixed",top:60,right:8,width:286,background:"#fff",borderRadius:16,boxShadow:"0 8px 32px rgba(0,0,0,.15)",zIndex:600,maxHeight:320,overflowY:"auto",border:"1px solid #f1f5f9"}}>
+        <div style={{padding:"12px 14px",borderBottom:"1px solid #f1f5f9",display:"flex",justifyContent:"space-between",alignItems:"center",position:"sticky",top:0,background:"#fff"}}>
+          <b style={{fontSize:13,color:"#0f172a"}}>Notifications</b>
+          <button onClick={()=>{setShowN(false);setNotifs(p=>p.map(n=>({...n,read:true})));}} style={{background:"none",border:"none",fontSize:18,cursor:"pointer",color:"#94a3b8"}}>×</button>
+        </div>
+        {notifs.map((n,i)=><div key={i} style={{padding:"11px 14px",borderBottom:"1px solid #f8fafc",background:n.read?"#fff":"#fef9c3"}}><div style={{fontSize:12,fontWeight:n.read?400:700,color:"#0f172a"}}>{n.msg}</div><div style={{fontSize:10,color:"#94a3b8",marginTop:3}}>{n.time}</div></div>)}
+      </div>}
+
+      {rateId&&<div style={{position:"fixed",inset:0,background:"rgba(15,23,42,.6)",zIndex:800,display:"flex",alignItems:"center",justifyContent:"center",padding:24,backdropFilter:"blur(4px)"}}>
+        <div className="card fadeIn" style={{padding:28,width:"100%",maxWidth:340,textAlign:"center"}}>
+          <div style={{fontSize:44,marginBottom:10}}>⭐</div>
+          <h3 style={{fontSize:18,fontWeight:900,marginBottom:4,color:"#0f172a"}}>Rate Your Delivery</h3>
+          <p style={{fontSize:13,color:"#64748b",marginBottom:20}}>How was your experience? Earn ₦100 wallet credit!</p>
+          <div style={{display:"flex",justifyContent:"center",gap:10,marginBottom:20}}>
+            {[1,2,3,4,5].map(i=><button key={i} onClick={()=>{setOrders(p=>p.map(o=>o.id===rateId?{...o,rating:i}:o));setWallet(w=>w+100);addN("⭐ Thank you! ₦100 added to wallet.");tst("₦100 credit added! 🎉");setRateId(null);}} style={{fontSize:36,background:"none",border:"none",cursor:"pointer"}}>⭐</button>)}
+          </div>
+          <button onClick={()=>setRateId(null)} style={{background:"none",border:"none",color:"#94a3b8",fontSize:13,cursor:"pointer"}}>Skip</button>
+        </div>
+      </div>}
+
+      {hdrEl}
+
+      {scr==="home"&&<div style={{padding:16}}>
+        <div style={{background:BG,borderRadius:20,padding:"24px 20px",textAlign:"center",color:"#fff",marginBottom:16,position:"relative",overflow:"hidden"}}>
+          <div style={{position:"absolute",top:-20,right:-20,width:120,height:120,borderRadius:"50%",background:"rgba(255,255,255,.08)"}}/>
+          <div style={{fontSize:48,marginBottom:4}}>🔥</div>
+          <h1 style={{margin:"0 0 4px",fontSize:22,fontWeight:900}}>Gas don finish, {user.name.split(" ")[0]}?</h1>
+          <p style={{margin:0,opacity:.85,fontSize:13}}>Fast LPG delivery across Asaba</p>
+          {user.area&&<div style={{marginTop:8,display:"inline-flex",alignItems:"center",gap:4,background:"rgba(255,255,255,.15)",borderRadius:20,padding:"4px 12px",fontSize:11,fontWeight:700}}>📍 {user.area}, Asaba</div>}
+        </div>
+        <div onClick={()=>setScr("wallet")} style={{background:"#0f172a",borderRadius:16,padding:"15px 18px",marginBottom:14,display:"flex",justifyContent:"space-between",alignItems:"center",cursor:"pointer"}}>
+          <div><div style={{fontSize:10,color:"#475569",fontWeight:700,textTransform:"uppercase",letterSpacing:.5,marginBottom:2}}>Wallet Balance</div><div style={{fontSize:24,fontWeight:900,color:"#fff"}}>{fmt(wallet)}</div><div style={{fontSize:11,color:"#475569",marginTop:2}}>Tap to earn more →</div></div>
+          <div style={{fontSize:38}}>💳</div>
+        </div>
+        {activeOrd&&<button onClick={()=>setShowGPS(true)} style={{width:"100%",background:"linear-gradient(135deg,#1d4ed8,#4338ca)",border:"none",borderRadius:14,padding:"13px 16px",color:"#fff",fontWeight:700,fontSize:13,cursor:"pointer",marginBottom:12,display:"flex",alignItems:"center",justifyContent:"center",gap:8}}><span className="pulse">📍</span>Rider is on the way — Open Live GPS Tracker</button>}
+        <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:10,marginBottom:14}}>
+          <div style={{background:"linear-gradient(135deg,#fffbeb,#fef3c7)",border:"1px solid #fcd34d",borderRadius:14,padding:"12px 13px"}}>
+            <div style={{fontSize:20,marginBottom:4}}>🎁</div>
+            <div style={{fontWeight:800,fontSize:12,color:"#92400e",marginBottom:2}}>Free Delivery</div>
+            <div style={{fontSize:11,color:"#a16207"}}>Order 12.5kg+ — free delivery + 2% wallet credit!</div>
+          </div>
+          <div style={{background:"linear-gradient(135deg,#f0f9ff,#e0f2fe)",border:"1px solid #7dd3fc",borderRadius:14,padding:"12px 13px"}}>
+            <div style={{fontSize:20,marginBottom:4}}>💳</div>
+            <div style={{fontWeight:800,fontSize:12,color:"#0c4a6e",marginBottom:2}}>Easy Payment</div>
+            <div style={{fontSize:11,color:"#0369a1"}}>Card, bank transfer, USSD or cash on delivery</div>
+          </div>
+        </div>
+        <div className="card" style={{padding:"12px 15px",marginBottom:14,display:"flex",justifyContent:"space-between",alignItems:"center"}}>
+          <div><div style={{fontSize:10,color:"#64748b",fontWeight:700,textTransform:"uppercase",letterSpacing:.5,marginBottom:2}}>Today's Gas Price — Asaba</div><div style={{fontSize:22,fontWeight:900,color:"#15803d"}}>{fmt(ppk)}<span style={{fontSize:12,fontWeight:500,color:"#64748b"}}>/kg</span></div></div>
+          <div style={{textAlign:"right"}}><div style={{fontSize:26}}>⛽</div><div style={{fontSize:10,color:"#94a3b8",marginTop:2}}>Market rate</div></div>
+        </div>
+        <h2 style={{fontSize:15,fontWeight:800,margin:"0 0 10px",color:"#0f172a"}}>Choose Cylinder Size</h2>
+        <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:10,marginBottom:14}}>
+          {CYLS.map(g=>{const p=calcP(g.kg,ppk);return(
+            <div key={g.id} onClick={()=>{setGas(g);setQty(1);setScr("order");}} style={{background:"#fff",borderRadius:14,padding:13,cursor:"pointer",textAlign:"center",border:g.prem?"2px solid "+BRAND:"1.5px solid #f1f5f9",boxShadow:g.prem?"0 2px 12px rgba(234,88,12,.15)":"0 1px 3px rgba(0,0,0,.06)"}}>
+              {g.prem&&<div style={{fontSize:9,fontWeight:800,color:"#fff",background:BG,borderRadius:20,padding:"3px 8px",marginBottom:6,display:"inline-block"}}>FREE DELIVERY</div>}
+              <div style={{fontSize:28,marginBottom:4}}>{g.icon}</div>
+              <div style={{fontWeight:800,fontSize:16,color:"#0f172a"}}>{g.lb}</div>
+              <div style={{fontSize:10,color:"#94a3b8",margin:"3px 0 6px"}}>{g.desc.replace(" — Free delivery","")}</div>
+              <div style={{fontWeight:800,color:BRAND,fontSize:15}}>{fmt(p)}</div>
+              <div style={{fontSize:10,color:"#cbd5e1",marginTop:1}}>{fmt(ppk)}/kg</div>
+            </div>
+          );})}
+        </div>
+        <div onClick={()=>setScr("subscribe")} style={{background:"linear-gradient(135deg,#fdf4ff,#f3e8ff)",border:"1.5px solid #d8b4fe",borderRadius:14,padding:"13px 15px",marginBottom:12,cursor:"pointer",display:"flex",justifyContent:"space-between",alignItems:"center"}}>
+          <div><div style={{fontWeight:800,fontSize:13,color:"#6b21a8",marginBottom:2}}>📅 Auto-Delivery Setup</div><div style={{fontSize:11,color:"#7c3aed"}}>Never run out of gas in Asaba — save up to 5%</div></div>
+          <span style={{fontSize:18,color:"#7c3aed"}}>→</span>
+        </div>
+        <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:10,marginBottom:10}}>
+          <button onClick={()=>setScr("track")} style={{background:"#fff7ed",border:"1.5px solid #fed7aa",borderRadius:12,padding:12,color:BRAND_DARK,fontWeight:700,fontSize:12,cursor:"pointer"}}>🏍️ Track Order</button>
+          <button onClick={()=>setScr("referral")} style={{background:BG,border:"none",borderRadius:12,padding:12,color:"#fff",fontWeight:700,fontSize:12,cursor:"pointer"}}>👥 Refer & Earn</button>
+        </div>
+        <div style={{display:"flex",gap:10,marginBottom:10}}>
+          <button onClick={()=>setScr("accessories")} style={{flex:1,background:"#f1f5f9",border:"none",borderRadius:12,padding:12,color:"#374151",fontWeight:600,fontSize:12,cursor:"pointer"}}>🔧 Accessories</button>
+          <button onClick={onLogout} style={{background:"none",border:"1px solid #e2e8f0",borderRadius:12,padding:"12px 18px",color:"#94a3b8",fontWeight:600,fontSize:12,cursor:"pointer"}}>Logout</button>
+        </div>
+      </div>}
+
+      {scr==="order"&&gas&&<div style={{padding:16}} className="fadeIn">
+        <h2 style={{fontSize:19,fontWeight:900,margin:"0 0 16px",color:"#0f172a"}}>Order Details</h2>
+        <div className="card" style={{padding:14,display:"flex",gap:12,alignItems:"center",marginBottom:14,border:"2px solid "+BRAND}}>
+          <span style={{fontSize:36}}>{gas.icon}</span>
+          <div style={{flex:1}}><div style={{fontWeight:800,fontSize:16,color:"#0f172a"}}>{gas.lb} LPG Cylinder</div><div style={{color:BRAND,fontWeight:700,fontSize:13,marginTop:2}}>{fmt(ppk)}/kg × {gas.kg}kg = {fmt(calcP(gas.kg,ppk))}</div></div>
+        </div>
+        {gas.prem&&<div style={{background:"linear-gradient(135deg,#fffbeb,#fef3c7)",borderRadius:12,padding:"10px 13px",marginBottom:12,border:"1px solid #fcd34d",display:"flex",gap:8,alignItems:"center"}}>
+          <span style={{fontSize:18}}>🎁</span>
+          <div><div style={{fontWeight:800,fontSize:12,color:"#92400e"}}>Premium perks unlocked!</div><div style={{fontSize:11,color:"#a16207",marginTop:1}}>Free delivery + 2% loyalty credit ({fmt(Math.round(calcP(gas.kg,ppk)*qty*LOYALTY))})</div></div>
+        </div>}
+        <Lbl t="Quantity" req/>
+        <div style={{display:"flex",alignItems:"center",gap:14,marginBottom:4}}>
+          <button onClick={()=>setQty(q=>Math.max(1,q-1))} style={{width:40,height:40,borderRadius:10,border:"1.5px solid #e2e8f0",background:"#fff",fontSize:20,cursor:"pointer",fontWeight:700,color:BRAND}}>−</button>
+          <span style={{fontSize:22,fontWeight:800,minWidth:28,textAlign:"center",color:"#0f172a"}}>{qty}</span>
+          <button onClick={()=>setQty(q=>q+1)} style={{width:40,height:40,borderRadius:10,border:"1.5px solid #e2e8f0",background:"#fff",fontSize:20,cursor:"pointer",fontWeight:700,color:BRAND}}>+</button>
+        </div>
+        <Lbl t="Your Area in Asaba" req/>
+        <select value={area} onChange={e=>setArea(e.target.value)} style={{width:"100%",padding:"12px 14px",border:"1.5px solid #e2e8f0",borderRadius:12,fontSize:14,outline:"none",background:"#fff",color:area?"#0f172a":"#94a3b8",marginBottom:6}}>
+          <option value="">— Select your area in Asaba —</option>
+          {AREAS.map(a=><option key={a} value={a}>{a}, Asaba</option>)}
+        </select>
+        {suggested&&area&&<div style={{background:"#f0fdf4",border:"1px solid #bbf7d0",borderRadius:10,padding:"9px 12px",marginBottom:10,fontSize:12,color:"#14532d",display:"flex",gap:6,alignItems:"center"}}>
+          <span>🏍️</span><div><b>{suggested.name}</b> — {suggested.area} · 📞 {suggested.phone} · Available now!</div>
+        </div>}
+        <Lbl t="Full Delivery Address" req/>
+        <textarea style={{width:"100%",padding:"12px 14px",border:"1.5px solid #e2e8f0",borderRadius:12,fontSize:13,outline:"none",resize:"none",color:"#0f172a"}} rows={2} value={addr} onChange={e=>setAddr(e.target.value)} placeholder="e.g. 14 Oguta Road, beside First Bank GRA..."/>
+        <button onClick={()=>{setAddr("📍 14 Oguta Road, GRA");setArea("GRA");tst("Location captured! 📍");}} style={{background:"none",border:"none",color:BRAND,fontWeight:700,fontSize:12,cursor:"pointer",margin:"6px 0 10px",padding:0}}>📍 Use my current location</button>
+        <Lbl t="WhatsApp Number for Confirmation" req/>
+        <Inp value={phone} onChange={e=>setPhone(e.target.value)} placeholder="080 xxxx xxxx" type="tel"/>
+        <div style={{fontSize:11,color:"#25D366",marginTop:4,marginBottom:6,fontWeight:600}}>💬 Order confirmation will be sent via WhatsApp</div>
+        <Lbl t="Delivery Time Slot" req/>
+        <div style={{display:"grid",gridTemplateColumns:"1fr 1fr 1fr",gap:8,marginBottom:14}}>
+          {SLOTS.map(([id,ic,lb,time])=>(
+            <div key={id} onClick={()=>setSlot(id)} style={{padding:"11px 8px",borderRadius:12,textAlign:"center",cursor:"pointer",border:slot===id?"2px solid "+BRAND:"1.5px solid #e2e8f0",background:slot===id?"#fff7ed":"#fff"}}>
+              <div style={{fontSize:20,marginBottom:2}}>{ic}</div>
+              <div style={{fontSize:11,fontWeight:700,color:slot===id?BRAND:"#374151"}}>{lb}</div>
+              <div style={{fontSize:9,color:"#94a3b8",marginTop:1}}>{time}</div>
+            </div>
+          ))}
+        </div>
+        <Lbl t="Promo Code"/>
+        <div style={{display:"flex",gap:8,marginBottom:6}}>
+          <input value={promo} onChange={e=>setPromo(e.target.value)} placeholder="e.g. ASABA10" style={{flex:1,padding:"12px 14px",border:"1.5px solid #e2e8f0",borderRadius:12,fontSize:13,outline:"none",color:"#0f172a"}}/>
+          <button onClick={()=>{const p=PROMOS[promo.toUpperCase()];if(!p)return tst("Invalid promo code","err");setPromoObj(p);tst("Promo applied: "+p.label+" 🎉");}} style={{background:BG,color:"#fff",border:"none",borderRadius:12,padding:"0 18px",fontWeight:700,fontSize:13,cursor:"pointer"}}>Apply</button>
+        </div>
+        {promoObj&&<div style={{background:"#f0fdf4",border:"1px solid #bbf7d0",borderRadius:10,padding:"8px 12px",marginBottom:8,fontSize:12,color:"#14532d"}}>✅ {promoObj.label} — saving {fmt(promoDisc)}</div>}
+        {wallet>0&&<div style={{background:"#0f172a",borderRadius:12,padding:"12px 14px",margin:"10px 0",display:"flex",justifyContent:"space-between",alignItems:"center"}}>
+          <div><div style={{fontSize:10,color:"#475569",fontWeight:700,textTransform:"uppercase",letterSpacing:.5}}>Use Wallet Credit</div><div style={{fontSize:15,fontWeight:800,color:"#fff",marginTop:2}}>{fmt(wallet)} available</div></div>
+          <div style={{display:"flex",alignItems:"center",gap:8}}>
+            {useWal&&<span style={{fontSize:11,color:"#86efac",fontWeight:700}}>−{fmt(walDisc)}</span>}
+            <div onClick={()=>setUseWal(v=>!v)} style={{width:44,height:24,borderRadius:12,background:useWal?BRAND:"#334155",cursor:"pointer",position:"relative",transition:"background .25s"}}>
+              <div style={{position:"absolute",top:3,left:useWal?22:3,width:18,height:18,borderRadius:"50%",background:"#fff",transition:"left .25s"}}/>
+            </div>
+          </div>
+        </div>}
+        <div className="card" style={{padding:14,margin:"12px 0 16px"}}>
+          {[["Cylinder",fmt(calcP(gas.kg,ppk))],["x Qty","x"+qty],["Subtotal",fmt(baseP*qty)],["Delivery",delivery===0?"FREE 🎁":fmt(delivery)],...(promoDisc>0?[["Promo ("+promoObj.disc+"%)","-"+fmt(promoDisc)]]:[]),...(walDisc>0?[["Wallet credit","-"+fmt(walDisc)]]:[]),...(bonus>0?[["2% Loyalty credit","+"+fmt(bonus)+" 🎁"]]:[]),["TOTAL",fmt(total)]].map(([k,v],i,a)=>(
+            <div key={k} style={{display:"flex",justifyContent:"space-between",padding:"6px 0",fontSize:i===a.length-1?16:13,fontWeight:i===a.length-1?900:400,borderTop:i===a.length-1?"1.5px solid #e2e8f0":"none",marginTop:i===a.length-1?4:0}}>
+              <span style={{color:i===a.length-1?"#0f172a":"#64748b"}}>{k}</span>
+              <span style={i===a.length-1?{color:BRAND}:{color:v.includes("FREE")||v.startsWith("+")?"#16a34a":v.startsWith("-")?"#dc2626":"#0f172a"}}>{v}</span>
+            </div>
+          ))}
+        </div>
+        <PBtn t="Continue to Payment →" onClick={()=>{if(!addr||!phone||!area){tst("Please fill area, address and phone","err");return;}setScr("payment");}}/>
+      </div>}
+
+      {scr==="payment"&&<div style={{padding:16}} className="fadeIn">
+        <h2 style={{fontSize:19,fontWeight:900,margin:"0 0 16px",color:"#0f172a"}}>Payment</h2>
+        <div className="card" style={{padding:"14px 16px",marginBottom:14,display:"flex",justifyContent:"space-between",alignItems:"center"}}>
+          <div><div style={{fontSize:11,color:"#64748b",fontWeight:600}}>Amount to pay</div><div style={{fontSize:22,fontWeight:900,color:BRAND,marginTop:2}}>{fmt(total)}</div></div>
+          {delivery===0&&<span style={{background:"#f0fdf4",color:"#16a34a",fontSize:11,fontWeight:700,padding:"4px 10px",borderRadius:20,border:"1px solid #bbf7d0"}}>FREE delivery ✓</span>}
+        </div>
+        {suggested&&<div style={{background:"#f8fafc",borderRadius:12,padding:"10px 13px",marginBottom:12,fontSize:12,color:"#475569",border:"1px solid #e2e8f0"}}>🏍️ <b>{suggested.name}</b> will handle your delivery in {area}, Asaba</div>}
+        <div style={{background:"linear-gradient(135deg,#f0fdf4,#dcfce7)",borderRadius:12,padding:"10px 13px",marginBottom:14,display:"flex",gap:8,alignItems:"center",border:"1px solid #bbf7d0"}}>
+          <span>💬</span><div style={{fontSize:12,color:"#14532d"}}>WhatsApp confirmation sent to <b>{phone}</b> after payment</div>
+        </div>
+        <div style={{fontSize:11,fontWeight:700,color:"#64748b",textTransform:"uppercase",letterSpacing:.4,marginBottom:10}}>Select Payment Method</div>
+        {[["transfer","🏦","Bank Transfer","GTBank, First Bank, Access & more"],["card","💳","Debit / Credit Card","Visa, Mastercard, Verve — secure & instant"],["ussd","📱","USSD Banking","*901# *737# *770# — no internet needed"],["cash","💵","Pay on Delivery","Cash payment when your gas arrives"]].map(([id,ic,lb,desc])=>(
+          <div key={id} onClick={()=>setPay(id)} style={{display:"flex",alignItems:"center",gap:12,padding:"13px 14px",borderRadius:14,background:"#fff",marginBottom:8,cursor:"pointer",border:pay===id?"2px solid "+BRAND:"1.5px solid #f1f5f9",boxShadow:pay===id?"0 2px 8px rgba(234,88,12,.12)":"0 1px 2px rgba(0,0,0,.04)"}}>
+            <div style={{width:40,height:40,borderRadius:10,background:pay===id?"#fff7ed":"#f8fafc",display:"flex",alignItems:"center",justifyContent:"center",fontSize:20}}>{ic}</div>
+            <div style={{flex:1}}><div style={{fontWeight:700,fontSize:14,color:"#0f172a"}}>{lb}</div><div style={{fontSize:11,color:"#94a3b8",marginTop:1}}>{desc}</div></div>
+            <div style={{width:20,height:20,borderRadius:"50%",border:"2px solid "+(pay===id?BRAND:"#e2e8f0"),background:pay===id?BRAND:"transparent",display:"flex",alignItems:"center",justifyContent:"center"}}>{pay===id&&<div style={{width:8,height:8,borderRadius:"50%",background:"#fff"}}/>}</div>
+          </div>
+        ))}
+        {pay==="transfer"&&<div className="card" style={{padding:14,marginBottom:6}}>
+          <div style={{fontSize:11,fontWeight:700,color:"#64748b",marginBottom:10,textTransform:"uppercase",letterSpacing:.4}}>Transfer Details</div>
+          {[["Bank","First Bank Nigeria"],["Account Number","3012345678"],["Account Name","GasNow Asaba Ltd"],["Amount",fmt(total)]].map(([k,v])=>(
+            <div key={k} style={{display:"flex",justifyContent:"space-between",padding:"6px 0",fontSize:13,borderBottom:"1px solid #f8fafc"}}><span style={{color:"#64748b"}}>{k}</span><b style={{color:k==="Amount"?BRAND:"#0f172a"}}>{v}</b></div>
+          ))}
+          <div style={{marginTop:10,background:"#fef9c3",borderRadius:8,padding:"8px 10px",fontSize:11,color:"#92400e"}}>⚠️ Use your phone number as transfer narration</div>
+        </div>}
+        {pay==="ussd"&&<div className="card" style={{padding:14,marginBottom:6}}>
+          <div style={{fontSize:11,fontWeight:700,color:"#64748b",marginBottom:10,textTransform:"uppercase",letterSpacing:.4}}>Dial on your phone</div>
+          {[["GTBank","*737*2*"+total+"*3012345678#"],["First Bank","*894*"+total+"*3012345678#"],["Access Bank","*901*"+total+"*3012345678#"],["Zenith Bank","*966*"+total+"*3012345678#"]].map(([bank,code])=>(
+            <div key={bank} style={{display:"flex",justifyContent:"space-between",padding:"6px 0",fontSize:12,borderBottom:"1px solid #f8fafc"}}>
+              <span style={{color:"#64748b",fontWeight:600}}>{bank}</span>
+              <b style={{color:"#0f172a",fontFamily:"monospace",fontSize:11}}>{code}</b>
+            </div>
+          ))}
+        </div>}
+        <div style={{height:14}}/>
+        <PBtn t={pay==="card"?"💳 Pay "+fmt(total)+" with Card":pay==="cash"?"📦 Place Order — Pay on Delivery":"✅ I've Transferred — Confirm Order"} onClick={()=>{if(pay==="card"){setShowCard(true);}else completeOrder();}}/>
+        <div style={{textAlign:"center",fontSize:11,color:"#94a3b8",marginTop:10}}>🔒 Secure payment · GasNow Asaba</div>
+      </div>}
+
+      {scr==="track"&&<div style={{padding:16}} className="fadeIn">
+        <h2 style={{fontSize:19,fontWeight:900,margin:"0 0 14px",color:"#0f172a"}}>Live Order Tracking</h2>
+        {activeOrd&&<button onClick={()=>setShowGPS(true)} style={{width:"100%",background:"linear-gradient(135deg,#1d4ed8,#4338ca)",border:"none",borderRadius:14,padding:"13px 16px",color:"#fff",fontWeight:700,fontSize:13,cursor:"pointer",marginBottom:14,display:"flex",alignItems:"center",justifyContent:"center",gap:8}}><span className="pulse">📍</span>Open Live GPS Map</button>}
+        <div style={{background:"linear-gradient(135deg,#eff6ff,#e0f2fe)",borderRadius:16,padding:16,marginBottom:14,border:"1px solid #bae6fd"}}>
+          <div style={{fontWeight:700,color:"#1e40af",marginBottom:12,fontSize:13}}>📍 Rider Preview — Asaba</div>
+          <div style={{display:"flex",alignItems:"center",gap:8}}>
+            <span style={{fontSize:18}}>🏪</span>
+            <div style={{flex:1,height:6,background:"#bfdbfe",borderRadius:3,position:"relative"}}>
+              <div style={{position:"absolute",top:-8,fontSize:20,left:Math.min(rpos*9,88)+"%",transition:"left .6s"}}>🏍️</div>
+            </div>
+            <span style={{fontSize:18}}>🏠</span>
+          </div>
+          <div style={{marginTop:14,textAlign:"center",fontWeight:800,color:"#1d4ed8",fontSize:14}}>{prog>=4?"✅ Delivered!":"ETA: ~"+Math.max(1,10-rpos)+" mins"}</div>
+        </div>
+        <div className="card" style={{padding:14,marginBottom:12}}>
+          {STEPS.map((s,i)=>(
+            <div key={i} style={{display:"flex",gap:12,alignItems:"flex-start",marginBottom:i<4?14:0}}>
+              <div style={{width:30,height:30,borderRadius:"50%",flexShrink:0,display:"flex",alignItems:"center",justifyContent:"center",fontSize:13,background:i<prog?BRAND:i===prog?"#fbbf24":"#f1f5f9",color:i<=prog?"#fff":"#94a3b8"}}>{SICO[i]}</div>
+              <div style={{paddingTop:5}}>
+                <div style={{fontSize:13,fontWeight:i===prog?700:500,color:i<=prog?"#0f172a":"#94a3b8"}}>{s}</div>
+                {i<prog&&<div style={{fontSize:10,color:"#16a34a",fontWeight:700,marginTop:1}}>Completed ✓</div>}
+                {i===prog&&<div style={{fontSize:10,color:BRAND,fontWeight:700,marginTop:1}}>In progress...</div>}
+              </div>
+            </div>
+          ))}
+        </div>
+        {(()=>{const r=activeOrd?RIDERS.find(x=>x.name===activeOrd.rider)||RIDERS[0]:RIDERS[0];return(
+          <div className="card" style={{padding:14,display:"flex",alignItems:"center",gap:12}}>
+            <div style={{width:44,height:44,borderRadius:12,background:"#fff7ed",display:"flex",alignItems:"center",justifyContent:"center",fontSize:22,border:"1.5px solid #fed7aa"}}>🏍️</div>
+            <div style={{flex:1}}><div style={{fontWeight:800,fontSize:14,color:"#0f172a"}}>{r.name}</div><div style={{fontSize:11,color:"#64748b",marginTop:1}}>📞 {r.phone} · {r.area}</div></div>
+            <a href={"tel:"+r.phone} style={{background:"#16a34a",color:"#fff",borderRadius:10,padding:"10px 16px",fontWeight:800,fontSize:13,textDecoration:"none",display:"inline-block"}}>📞 Call</a>
+          </div>
+        );})()}
+      </div>}
+
+      {scr==="history"&&<div style={{padding:16}} className="fadeIn">
+        <h2 style={{fontSize:19,fontWeight:900,margin:"0 0 14px",color:"#0f172a"}}>Order History</h2>
+        {(myOrd.length?myOrd:orders).map(o=>(
+          <div key={o.id} className="card" style={{padding:14,marginBottom:10}}>
+            <div style={{display:"flex",justifyContent:"space-between",marginBottom:8}}><b style={{fontSize:14,color:"#0f172a"}}>{o.id}</b><Pill s={o.status}/></div>
+            <div style={{fontSize:13,fontWeight:700,color:"#0f172a",marginBottom:4}}>🔴 {o.kg}kg ×{o.qty||1} — {fmt(o.total||calcP(o.kg,ppk)*(o.qty||1))}</div>
+            <div style={{fontSize:11,color:"#64748b",marginBottom:3}}>📍 {o.address}, {o.area||"Asaba"}</div>
+            <div style={{fontSize:11,color:"#94a3b8",marginBottom:o.wasSent?4:8}}>{o.date} · 🏍️ {o.rider}</div>
+            {o.wasSent&&<div style={{fontSize:11,color:"#25D366",fontWeight:700,marginBottom:8}}>💬 WhatsApp confirmation sent ✓</div>}
+            <div style={{display:"flex",gap:7,flexWrap:"wrap"}}>
+              <SBtn t="Reorder →" bg="#fff7ed" c={BRAND_DARK} onClick={()=>{setGas(CYLS.find(c=>c.kg===o.kg)||CYLS[4]);setQty(o.qty||1);setScr("payment");}}/>
+              {o.status==="Delivered"&&<SBtn t="🧾 Receipt" bg="#eff6ff" c="#1d4ed8" onClick={()=>setRcptOrd(o)}/>}
+              {o.status==="Delivered"&&!o.rating&&<SBtn t="⭐ Rate" bg="#fef9c3" c="#92400e" onClick={()=>setRateId(o.id)}/>}
+              {o.rating&&<Stars val={o.rating} sz={13}/>}
+            </div>
+          </div>
+        ))}
+      </div>}
+
+      {scr==="wallet"&&<div style={{padding:16,paddingBottom:80}} className="fadeIn">
+        <h2 style={{fontSize:19,fontWeight:900,margin:"0 0 4px",color:"#0f172a"}}>My Wallet</h2>
+        <p style={{fontSize:12,color:"#64748b",marginBottom:16}}>Earn credits and spend on your next order</p>
+        <div style={{background:"#0f172a",borderRadius:20,padding:24,marginBottom:16,textAlign:"center",position:"relative",overflow:"hidden"}}>
+          <div style={{position:"absolute",top:-30,right:-30,width:120,height:120,borderRadius:"50%",background:"rgba(234,88,12,.1)"}}/>
+          <div style={{fontSize:10,color:"#475569",fontWeight:700,textTransform:"uppercase",letterSpacing:.5,marginBottom:6}}>Total Balance</div>
+          <div style={{fontSize:40,fontWeight:900,color:"#fff"}}>{fmt(wallet)}</div>
+          <div style={{fontSize:11,color:"#475569",marginTop:6}}>Use at checkout to save on your orders</div>
+        </div>
+        <button onClick={()=>setScr("referral")} style={{width:"100%",background:BG,color:"#fff",border:"none",borderRadius:14,padding:"14px",fontWeight:800,fontSize:14,cursor:"pointer",marginBottom:16}}>👥 Share App & Earn ₦500 →</button>
+        {[["🎁","Order 12.5kg, 25kg or 50kg","2% of order value returned to wallet"],["⭐","Rate your delivery","₦100 per completed rating"],["🎉","Welcome bonus","₦500 when you sign up"],["👥","Refer a friend","₦500 when they place first order"]].map(([ic,t,d])=>(
+          <div key={t} className="card" style={{padding:"12px 14px",marginBottom:8,display:"flex",gap:12,alignItems:"center"}}>
+            <div style={{width:38,height:38,borderRadius:10,background:"#fff7ed",display:"flex",alignItems:"center",justifyContent:"center",fontSize:18,flexShrink:0}}>{ic}</div>
+            <div><div style={{fontWeight:700,fontSize:13,color:"#0f172a"}}>{t}</div><div style={{fontSize:11,color:"#64748b",marginTop:1}}>{d}</div></div>
+          </div>
+        ))}
+      </div>}
+
+      {scr==="referral"&&<div style={{padding:16,paddingBottom:80}} className="fadeIn">
+        <h2 style={{fontSize:19,fontWeight:900,margin:"0 0 4px",color:"#0f172a"}}>Refer & Earn</h2>
+        <p style={{fontSize:12,color:"#64748b",marginBottom:16}}>Share GasNow with people in Asaba — earn ₦500 for every friend that orders!</p>
+        <div style={{background:"#0f172a",borderRadius:20,padding:22,marginBottom:16,textAlign:"center",position:"relative",overflow:"hidden"}}>
+          <div style={{position:"absolute",top:-30,right:-30,width:140,height:140,borderRadius:"50%",background:BRAND,opacity:.08}}/>
+          <div style={{fontSize:10,color:"#475569",fontWeight:700,textTransform:"uppercase",letterSpacing:.5,marginBottom:6}}>Your Referral Code</div>
+          <div style={{fontSize:32,fontWeight:900,color:"#fff",letterSpacing:5,marginBottom:10,fontFamily:"monospace"}}>{user.refCode||"GASNOW"}</div>
+          <div style={{fontSize:11,color:"#475569",marginBottom:16}}>Friends get ₦1,000 sign-up bonus · You get ₦500 when they order!</div>
+          <div style={{display:"flex",gap:8,justifyContent:"center"}}>
+            <div style={{background:"rgba(255,255,255,.08)",borderRadius:10,padding:"8px 16px",fontSize:13,fontWeight:700,color:"#e2e8f0"}}>👥 {user.refs||0} referrals</div>
+            <div style={{background:"rgba(255,255,255,.08)",borderRadius:10,padding:"8px 16px",fontSize:13,fontWeight:700,color:"#e2e8f0"}}>💰 {fmt((user.refs||0)*500)}</div>
+          </div>
+        </div>
+        <div style={{fontSize:11,fontWeight:700,color:"#64748b",textTransform:"uppercase",letterSpacing:.5,marginBottom:10}}>Share via</div>
+        <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:10,marginBottom:16}}>
+          <button onClick={()=>{const msg="🔥 I use GasNow Asaba for fast LPG delivery!\n\nSign up with my code *"+(user.refCode||"GASNOW")+"* and get ₦1,000 bonus!\n\n"+APP_URL+"\n📞 "+SUPPORT;waOpen(user.phone||SUPPORT,msg);tst("WhatsApp opened! 💬");}} style={{background:"#25D366",color:"#fff",border:"none",borderRadius:14,padding:"15px",fontWeight:800,fontSize:13,cursor:"pointer"}}>💬 WhatsApp</button>
+          <button onClick={()=>{const txt="🔥 I use GasNow Asaba for fast LPG delivery! Use my code "+(user.refCode||"GASNOW")+" and get ₦1,000 bonus! "+APP_URL;if(navigator.share){navigator.share({title:"GasNow Asaba 🔥",text:txt,url:APP_URL}).then(()=>tst("Shared! 🎉")).catch(()=>{copyText(txt,()=>tst("Copied! Share it 📋"));});}else copyText(txt,()=>tst("Info copied! Share it 📋"));}} style={{background:BG,color:"#fff",border:"none",borderRadius:14,padding:"15px",fontWeight:800,fontSize:13,cursor:"pointer"}}>📤 Share App</button>
+          <button onClick={()=>copyText(APP_URL+"?ref="+(user.refCode||"GASNOW"),()=>tst("Referral link copied! 🔗"))} style={{background:"#eff6ff",color:"#1d4ed8",border:"none",borderRadius:14,padding:"15px",fontWeight:800,fontSize:13,cursor:"pointer"}}>🔗 Copy Link</button>
+          <button onClick={()=>copyText(user.refCode||"GASNOW",()=>tst("Code "+(user.refCode||"GASNOW")+" copied! 📋"))} style={{background:"#f3e8ff",color:"#6b21a8",border:"none",borderRadius:14,padding:"15px",fontWeight:800,fontSize:13,cursor:"pointer"}}>📋 Copy Code</button>
+        </div>
+        <div className="card" style={{padding:14}}>
+          <div style={{fontWeight:800,fontSize:13,marginBottom:12,color:"#0f172a"}}>How it works</div>
+          {[["1️⃣","Share your referral code or link with friends in Asaba"],["2️⃣","Friend signs up using your referral code"],["3️⃣","Friend gets ₦1,000 welcome bonus automatically"],["4️⃣","Friend places their first gas order"],["5️⃣","You receive ₦500 wallet credit instantly! 🎉"]].map(([n,t])=>(
+            <div key={n} style={{display:"flex",gap:12,alignItems:"flex-start",marginBottom:10}}><span style={{fontSize:15,flexShrink:0}}>{n}</span><span style={{fontSize:13,color:"#374151",lineHeight:1.5}}>{t}</span></div>
+          ))}
+        </div>
+      </div>}
+
+      {scr==="subscribe"&&<div style={{padding:16,paddingBottom:80}} className="fadeIn">
+        <h2 style={{fontSize:19,fontWeight:900,margin:"0 0 4px",color:"#0f172a"}}>Auto-Delivery</h2>
+        <p style={{fontSize:12,color:"#64748b",marginBottom:16}}>Never run out of gas in Asaba — set a schedule and save!</p>
+        {sub&&<div style={{background:"#f0fdf4",border:"2px solid #22c55e",borderRadius:14,padding:"14px 16px",marginBottom:16,display:"flex",justifyContent:"space-between",alignItems:"center"}}>
+          <div><div style={{fontWeight:800,color:"#14532d",fontSize:14}}>✅ Auto-delivery is active!</div><div style={{fontSize:12,color:"#16a34a",marginTop:2}}>Plan: <b>{SUBS.find(p=>p.id===sub)?.lb}</b></div></div>
+          <button onClick={()=>{setSub(null);tst("Auto-delivery cancelled");}} style={{background:"#fee2e2",border:"none",borderRadius:8,padding:"8px 14px",color:"#7f1d1d",fontWeight:700,fontSize:12,cursor:"pointer"}}>Cancel</button>
+        </div>}
+        {SUBS.map(p=>(
+          <div key={p.id} onClick={()=>{setSub(p.id);tst("Auto-delivery set: "+p.lb+" 🎉");}} className="card" style={{padding:16,marginBottom:10,cursor:"pointer",border:sub===p.id?"2px solid "+BRAND:"1.5px solid #f1f5f9"}}>
+            <div style={{display:"flex",justifyContent:"space-between",alignItems:"center"}}>
+              <div style={{display:"flex",gap:12,alignItems:"center"}}><span style={{fontSize:28}}>{p.icon}</span><div><div style={{fontWeight:800,fontSize:15,color:"#0f172a"}}>{p.lb}</div><div style={{fontSize:11,color:"#64748b",marginTop:2}}>Save {p.disc}% on every auto-delivery order</div></div></div>
+              <div style={{fontWeight:800,color:BRAND,fontSize:14}}>Save {p.disc}%</div>
+            </div>
+          </div>
+        ))}
+      </div>}
+
+      {scr==="accessories"&&<div style={{padding:16}} className="fadeIn">
+        <h2 style={{fontSize:19,fontWeight:900,margin:"0 0 4px",color:"#0f172a"}}>Accessories & Maintenance</h2>
+        <p style={{fontSize:12,color:"#64748b",marginBottom:14}}>Genuine parts & professional cylinder services in Asaba</p>
+        <div style={{background:"linear-gradient(135deg,#f3e8ff,#ede9fe)",border:"1.5px solid #d8b4fe",borderRadius:16,padding:"14px 16px",marginBottom:14}}>
+          <div style={{fontWeight:800,fontSize:14,color:"#6b21a8",marginBottom:8}}>🛠️ Professional Maintenance Services</div>
+          {["✅ Gas leak detection & pressure testing","✅ Valve replacement & servicing","✅ Cylinder re-certification","✅ Safety inspection & compliance check","✅ Same-day service across Asaba"].map(s=><div key={s} style={{fontSize:12,color:"#4c1d95",marginBottom:4}}>{s}</div>)}
+          <a href={"tel:"+SUPPORT} style={{display:"flex",alignItems:"center",justifyContent:"center",gap:6,marginTop:12,padding:"10px",background:"#7c3aed",borderRadius:10,fontSize:13,color:"#fff",fontWeight:700,textDecoration:"none"}}>📞 Book Service — {SUPPORT}</a>
+        </div>
+        {ACCS.map(a=>(
+          <div key={a.name} className="card" style={{padding:"12px 14px",marginBottom:8,display:"flex",alignItems:"center",gap:12}}>
+            <div style={{width:42,height:42,borderRadius:10,background:"#fff7ed",display:"flex",alignItems:"center",justifyContent:"center",fontSize:22,flexShrink:0}}>{a.icon}</div>
+            <div style={{flex:1}}><div style={{fontWeight:700,fontSize:13,color:"#0f172a"}}>{a.name}</div><div style={{fontSize:11,color:"#94a3b8",marginTop:1}}>{a.desc}</div></div>
+            <div style={{textAlign:"right"}}>
+              <div style={{fontWeight:800,color:BRAND,fontSize:15}}>{fmt(a.price)}</div>
+              <button onClick={()=>waOpen(SUPPORT,"Hi GasNow Asaba! I want to order: "+a.name+" ("+fmt(a.price)+")")} style={{marginTop:4,background:BG,color:"#fff",border:"none",borderRadius:8,padding:"5px 10px",fontSize:11,fontWeight:700,cursor:"pointer"}}>Order</button>
+            </div>
+          </div>
+        ))}
+      </div>}
+
+      {scr==="comments"&&<div style={{padding:16,paddingBottom:80}} className="fadeIn">
+        <h2 style={{fontSize:19,fontWeight:900,margin:"0 0 4px",color:"#0f172a"}}>Comments & Feedback</h2>
+        <p style={{fontSize:12,color:"#64748b",marginBottom:16}}>Share your GasNow Asaba experience!</p>
+        <div className="card" style={{padding:14,marginBottom:14}}>
+          <div style={{fontWeight:700,fontSize:13,color:"#0f172a",marginBottom:10}}>✍️ Leave a comment</div>
+          <textarea value={newCmt} onChange={e=>setNewCmt(e.target.value)} placeholder="Tell us about your experience, a suggestion or complaint..." style={{width:"100%",padding:"12px 14px",border:"1.5px solid #e2e8f0",borderRadius:12,fontSize:13,outline:"none",resize:"none",boxSizing:"border-box",minHeight:90,color:"#0f172a"}} rows={3}/>
+          <button onClick={()=>{if(!newCmt.trim())return tst("Type your comment first","err");const c={id:Date.now(),author:user.name,av:user.name[0],time:fmtDate()+" "+fmtTime(),msg:newCmt.trim(),reply:null,rTime:null};setComments(p=>[c,...p]);setNewCmt("");tst("Comment submitted! We will reply soon 🙏");}} style={{width:"100%",marginTop:10,background:BG,color:"#fff",border:"none",borderRadius:12,padding:"12px",fontWeight:800,fontSize:14,cursor:"pointer"}}>Submit Comment 💬</button>
+        </div>
+        <div style={{background:"linear-gradient(135deg,#f0fdf4,#dcfce7)",border:"1px solid #bbf7d0",borderRadius:14,padding:"14px 16px",marginBottom:16}}>
+          <div style={{fontWeight:800,fontSize:13,color:"#14532d",marginBottom:8}}>🎧 Need immediate help?</div>
+          <div style={{display:"flex",gap:8}}>
+            <a href={"tel:"+SUPPORT} style={{flex:1,background:"#16a34a",color:"#fff",borderRadius:10,padding:"10px",fontWeight:800,fontSize:12,textDecoration:"none",textAlign:"center",display:"block"}}>📞 Call {SUPPORT}</a>
+            <a href={"https://wa.me/234"+SUPPORT.replace(/^0/,"")+"?text=Hi+GasNow+Asaba+Support!"} target="_blank" style={{flex:1,background:"#25D366",color:"#fff",borderRadius:10,padding:"10px",fontWeight:800,fontSize:12,textDecoration:"none",textAlign:"center",display:"block"}}>💬 WhatsApp</a>
+          </div>
+        </div>
+        <div style={{fontSize:11,fontWeight:700,color:"#64748b",textTransform:"uppercase",letterSpacing:.5,marginBottom:10}}>All Comments ({comments.length})</div>
+        {comments.map(c=>(
+          <div key={c.id} className="card" style={{padding:14,marginBottom:10}}>
+            <div style={{display:"flex",gap:10,marginBottom:10}}>
+              <div style={{width:38,height:38,borderRadius:10,background:BG,color:"#fff",fontWeight:800,fontSize:15,display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0}}>{c.av}</div>
+              <div style={{flex:1}}>
+                <div style={{display:"flex",justifyContent:"space-between",marginBottom:3}}><span style={{fontWeight:800,fontSize:13,color:"#0f172a"}}>{c.author}</span><span style={{fontSize:10,color:"#94a3b8"}}>{c.time}</span></div>
+                <div style={{fontSize:13,color:"#374151",lineHeight:1.6}}>{c.msg}</div>
+              </div>
+            </div>
+            {c.reply?<div style={{background:"linear-gradient(135deg,#f0fdf4,#dcfce7)",borderRadius:10,padding:"10px 12px",marginLeft:48,border:"1px solid #bbf7d0"}}>
+              <div style={{display:"flex",justifyContent:"space-between",marginBottom:4}}><div style={{display:"flex",alignItems:"center",gap:5}}><span>🎧</span><b style={{fontSize:11,color:"#14532d"}}>GasNow Support</b><span style={{background:"#16a34a",color:"#fff",fontSize:9,fontWeight:800,padding:"1px 6px",borderRadius:20}}>Official</span></div><span style={{fontSize:10,color:"#94a3b8"}}>{c.rTime}</span></div>
+              <div style={{fontSize:12,color:"#166534",lineHeight:1.6}}>{c.reply}</div>
+            </div>:<div style={{marginLeft:48,background:"#f8fafc",borderRadius:8,padding:"8px 10px",fontSize:11,color:"#94a3b8",border:"1px dashed #e2e8f0"}}>⏳ Awaiting response...</div>}
+          </div>
+        ))}
+      </div>}
+
+      <div style={{position:"fixed",bottom:0,left:"50%",transform:"translateX(-50%)",width:"100%",maxWidth:430,background:"#fff",borderTop:"1px solid #f1f5f9",display:"flex",zIndex:200,boxShadow:"0 -2px 10px rgba(0,0,0,.06)"}}>
+        {[["🏠","Home","home"],["📦","Order","order"],["📍","Track","track"],["📜","History","history"],["💬","Feedback","comments"]].map(([ic,lb,sc])=>(
+          <button key={sc} onClick={()=>{if(sc==="order"&&!gas){setScr("home");return;}setScr(sc);}} style={{flex:1,background:"none",border:"none",padding:"10px 0 9px",cursor:"pointer",display:"flex",flexDirection:"column",alignItems:"center",gap:1,color:scr===sc?BRAND:"#94a3b8",fontWeight:600}}>
+            <span style={{fontSize:19}}>{ic}</span>
+            <span style={{fontSize:9,letterSpacing:.3}}>{lb}</span>
+            {scr===sc&&<div style={{width:18,height:2.5,background:BRAND,borderRadius:2,marginTop:2}}/>}
+          </button>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+function Admin({onLogout,orders,setOrders,ppk,setPpk,comments,setComments}){
+  const [tab,setTab]=useState("dashboard");
+  const [filt,setFilt]=useState("All");
+  const [toast,setTst]=useState(null);
+  const [showGPS,setShowGPS]=useState(false);
+  const [gpsOrd,setGpsOrd]=useState(null);
+  const [rcptOrd,setRcptOrd]=useState(null);
+  const [replyId,setReplyId]=useState(null);
+  const [replyTxt,setReplyTxt]=useState("");
+  const tst=msg=>{setTst({msg});setTimeout(()=>setTst(null),3000);};
+  const upS=(id,s)=>{setOrders(p=>p.map(o=>{if(o.id!==id)return o;if(s==="Delivered"){setTimeout(()=>waOpen(o.phone,"🎉 *GasNow Asaba — Delivered!*\n\nHello "+o.customer+"! Your gas has been delivered.\n\n📦 Order: "+o.id+"\n💰 Total: "+fmt(o.total||0)+"\n📍 "+o.address+", "+o.area+", Asaba\n\nPlease rate your experience in the app to earn ₦100!\n\nThank you! 🔥 "+SUPPORT),500);tst(id+" delivered! WhatsApp sent 💬");}else tst(id+" → "+s);return{...o,status:s};}));};
+  const asgn=(id,rname)=>{if(!rname)return;setOrders(p=>p.map(o=>{if(o.id!==id)return o;const r=RIDERS.find(x=>x.name===rname)||RIDERS[0];setTimeout(()=>waOpen(o.phone,"🏍️ *GasNow Asaba Update*\n\nHello "+o.customer+"! Rider *"+rname+"* (📞 "+r.phone+") has been assigned to your order "+o.id+".\n\nThey will arrive at "+o.address+", "+o.area+", Asaba shortly!\n\n📞 Support: "+SUPPORT),500);tst("Rider assigned + WhatsApp sent 💬");return{...o,rider:rname,status:"Confirmed"};}));};
+  const shown=filt==="All"?orders:orders.filter(o=>o.status===filt);
+  const delivered=orders.filter(o=>o.status==="Delivered");
+  const stats={total:orders.length,pending:orders.filter(o=>o.status==="Pending").length,active:orders.filter(o=>o.status==="On the Way").length,rev:delivered.reduce((s,o)=>s+(o.total||0),0)};
+  const avgRat=(()=>{const r=orders.filter(o=>o.rating);return r.length?(r.reduce((s,o)=>s+o.rating,0)/r.length).toFixed(1):"N/A";})();
+  const activeOrd=orders.find(o=>o.status==="On the Way");
+  const customers=(()=>{const m={};orders.forEach(o=>{if(!m[o.customer])m[o.customer]={name:o.customer,phone:o.phone,area:o.area||"Asaba",orders:0,spend:0,last:o.date};m[o.customer].orders++;m[o.customer].spend+=(o.total||0);m[o.customer].last=o.date;});return Object.values(m).sort((a,b)=>b.spend-a.spend);})();
+  return(
+    <div style={{minHeight:"100vh",background:"#f1f5f9"}}>
+      <Toast t={toast&&{msg:toast.msg}}/>
+      {rcptOrd&&<ReceiptModal o={rcptOrd} ppk={ppk} onClose={()=>setRcptOrd(null)}/>}
+      {showGPS&&gpsOrd&&<GPSMap order={gpsOrd} onClose={()=>setShowGPS(false)}/>}
+      <div style={{background:"#0f172a",padding:"12px 16px",display:"flex",justifyContent:"space-between",alignItems:"center",position:"sticky",top:0,zIndex:100}}>
+        <div style={{display:"flex",alignItems:"center",gap:8}}><span style={{fontWeight:900,fontSize:17,color:"#fff"}}>🔥 GasNow</span><span style={{background:BRAND,color:"#fff",fontSize:10,fontWeight:800,padding:"3px 8px",borderRadius:20}}>ADMIN</span><span style={{fontSize:10,color:"#475569"}}>Asaba</span></div>
+        <button onClick={onLogout} style={{background:"#dc2626",border:"none",color:"#fff",borderRadius:8,padding:"6px 12px",fontSize:12,fontWeight:700,cursor:"pointer"}}>Logout</button>
+      </div>
+      <div style={{display:"flex",background:"#fff",borderBottom:"1px solid #e2e8f0",overflowX:"auto"}}>
+        {[["dashboard","📊","Dash"],["orders","📦","Orders"],["customers","👥","Customers"],["riders","🏍️","Riders"],["comments","💬","Comments"],["pricing","⛽","Pricing"],["analytics","📈","Analytics"]].map(([id,ic,lb])=>(
+          <button key={id} onClick={()=>setTab(id)} style={{padding:"11px 12px",border:"none",background:"none",cursor:"pointer",fontWeight:tab===id?800:500,color:tab===id?BRAND:"#64748b",borderBottom:tab===id?"2.5px solid "+BRAND:"2.5px solid transparent",fontSize:11,whiteSpace:"nowrap"}}>{ic} {lb}</button>
+        ))}
+      </div>
+      <div style={{padding:14,paddingBottom:30}}>
+
+        {tab==="dashboard"&&<>
+          <h2 style={{fontSize:17,fontWeight:900,margin:"0 0 12px",color:"#0f172a"}}>Dashboard</h2>
+          {activeOrd&&<button onClick={()=>{setGpsOrd(activeOrd);setShowGPS(true);}} style={{width:"100%",background:"linear-gradient(135deg,#1d4ed8,#4338ca)",border:"none",borderRadius:14,padding:13,color:"#fff",fontWeight:700,fontSize:13,cursor:"pointer",marginBottom:12,display:"flex",alignItems:"center",justifyContent:"center",gap:8}}><span className="pulse">📍</span>Live Track: {activeOrd.rider} → {activeOrd.customer} ({activeOrd.area})</button>}
+          <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:9,marginBottom:12}}>
+            {[["📦","Total Orders",stats.total,"#3b82f6"],["⏳","Pending",stats.pending,"#f59e0b"],["🏍️","On the Way",stats.active,"#8b5cf6"],["⭐","Avg Rating",avgRat,"#f59e0b"],["💰","Revenue",fmt(stats.rev),"#16a34a"]].map(([ic,lb,v,c],i)=>(
+              <div key={lb} className="card" style={{padding:13,gridColumn:i===4?"1/-1":"auto",borderLeft:"3px solid "+c}}>
+                <div style={{fontSize:18,marginBottom:3}}>{ic}</div>
+                <div style={{fontSize:i===4?20:22,fontWeight:900,color:c}}>{v}</div>
+                <div style={{fontSize:10,color:"#64748b",fontWeight:700,textTransform:"uppercase",letterSpacing:.3,marginTop:1}}>{lb}</div>
+              </div>
+            ))}
+          </div>
+          <BarChart/>
+          <div style={{marginTop:12}}>{orders.slice(0,3).map(o=>(
+            <div key={o.id} className="card" style={{padding:12,marginBottom:8}}>
+              <div style={{display:"flex",justifyContent:"space-between",marginBottom:4}}><b style={{fontSize:13,color:"#0f172a"}}>{o.id} — {o.customer}</b><Pill s={o.status}/></div>
+              <div style={{fontSize:11,color:"#64748b"}}>{o.kg}kg ×{o.qty} · {fmt(o.total||0)} · {o.area}, Asaba · {o.date}{o.wasSent&&<span style={{color:"#25D366",marginLeft:4}}>💬</span>}</div>
+            </div>
+          ))}</div>
+        </>}
+
+        {tab==="orders"&&<>
+          <h2 style={{fontSize:17,fontWeight:900,margin:"0 0 10px",color:"#0f172a"}}>All Orders</h2>
+          <div style={{display:"flex",gap:6,overflowX:"auto",marginBottom:12,paddingBottom:3}}>
+            {["All","Pending","Confirmed","On the Way","Delivered"].map(s=><button key={s} onClick={()=>setFilt(s)} style={{padding:"6px 13px",borderRadius:20,border:"none",cursor:"pointer",whiteSpace:"nowrap",fontWeight:700,fontSize:11,background:filt===s?BRAND:"#e2e8f0",color:filt===s?"#fff":"#64748b"}}>{s}</button>)}
+          </div>
+          {shown.map(o=>(
+            <div key={o.id} className="card" style={{padding:13,marginBottom:9}}>
+              <div style={{display:"flex",justifyContent:"space-between",marginBottom:6}}><b style={{fontSize:13,color:"#0f172a"}}>{o.id}</b><Pill s={o.status}/></div>
+              <div style={{fontSize:12,fontWeight:700,marginBottom:3,color:"#0f172a"}}>👤 {o.customer} · {o.phone}</div>
+              <div style={{fontSize:12,color:"#64748b",marginBottom:3}}>🔴 {o.kg}kg ×{o.qty} = {fmt(o.total||0)}{o.prem&&<span style={{color:BRAND,fontWeight:700}}> · FREE delivery</span>}</div>
+              <div style={{fontSize:12,color:"#64748b",marginBottom:6}}>📍 {o.address}, {o.area||"Asaba"} · 🏍️ {o.rider}</div>
+              {o.wasSent&&<div style={{fontSize:11,color:"#25D366",fontWeight:700,marginBottom:6}}>💬 WhatsApp sent ✓</div>}
+              {o.rating&&<div style={{marginBottom:6}}><Stars val={o.rating} sz={12}/></div>}
+              <div style={{display:"flex",gap:6,flexWrap:"wrap"}}>
+                {o.status==="Pending"&&<SBtn t="✅ Confirm" bg="#dbeafe" c="#1e40af" onClick={()=>upS(o.id,"Confirmed")}/>}
+                {o.status==="Confirmed"&&<SBtn t="🏍️ Dispatch" bg="#f3e8ff" c="#6b21a8" onClick={()=>upS(o.id,"On the Way")}/>}
+                {o.status==="On the Way"&&<><SBtn t="🎉 Delivered" bg="#dcfce7" c="#14532d" onClick={()=>upS(o.id,"Delivered")}/><SBtn t="📍 GPS" bg="#dbeafe" c="#1e40af" onClick={()=>{setGpsOrd(o);setShowGPS(true);}}/></>}
+                {(o.status==="Pending"||o.status==="Confirmed")&&(
+                  <select defaultValue="" onChange={e=>asgn(o.id,e.target.value)} style={{padding:"5px 9px",border:"none",borderRadius:8,fontWeight:700,fontSize:11,background:"#f1f5f9",cursor:"pointer",color:"#374151"}}>
+                    <option value="">Assign Rider...</option>
+                    {RIDERS.filter(r=>r.active).map(r=><option key={r.name} value={r.name}>{r.name} ({r.area}){o.area&&r.zones.some(z=>z.toLowerCase().includes((o.area||"").toLowerCase())||(o.area||"").toLowerCase().includes(z.toLowerCase()))?" ⭐":""}</option>)}
+                  </select>
+                )}
+                {o.status==="Delivered"&&<SBtn t="🧾 Receipt" bg="#eff6ff" c="#1d4ed8" onClick={()=>setRcptOrd(o)}/>}
+                <SBtn t="💬 WA" bg="#dcfce7" c="#14532d" onClick={()=>waOpen(o.phone,"Hi "+o.customer+"! This is GasNow Asaba. Regarding order "+o.id+". How can we help?")}/>
+                <SBtn t="✕" bg="#fee2e2" c="#7f1d1d" onClick={()=>upS(o.id,"Cancelled")}/>
+              </div>
+            </div>
+          ))}
+        </>}
+
+        {tab==="customers"&&<>
+          <h2 style={{fontSize:17,fontWeight:900,margin:"0 0 4px",color:"#0f172a"}}>Customer Database</h2>
+          <p style={{fontSize:12,color:"#64748b",marginBottom:14}}>{customers.length} customers across Asaba · Sorted by total spend</p>
+          {customers.map((c,i)=>(
+            <div key={c.name} className="card" style={{padding:14,marginBottom:9,border:i===0?"2px solid "+BRAND:"1px solid #f1f5f9"}}>
+              <div style={{display:"flex",alignItems:"center",gap:11,marginBottom:10}}>
+                <div style={{width:42,height:42,borderRadius:12,background:i===0?BG:"#f1f5f9",color:i===0?"#fff":"#374151",fontWeight:800,fontSize:17,display:"flex",alignItems:"center",justifyContent:"center"}}>{c.name[0]}</div>
+                <div style={{flex:1}}><div style={{fontWeight:800,fontSize:14,color:"#0f172a"}}>{c.name}{i===0&&<span style={{fontSize:10,background:"#fef9c3",color:"#92400e",padding:"2px 7px",borderRadius:20,fontWeight:700,marginLeft:7}}>🏆 Top Customer</span>}</div><div style={{fontSize:11,color:"#64748b",marginTop:1}}>📞 {c.phone} · 📍 {c.area}, Asaba</div></div>
+                <a href={"tel:"+c.phone} style={{background:"#16a34a",color:"#fff",borderRadius:9,padding:"7px 11px",fontWeight:700,fontSize:11,textDecoration:"none",display:"inline-block"}}>📞</a>
+                <button onClick={()=>waOpen(c.phone,"Hello "+c.name+"! This is GasNow Asaba 🔥. Do you need gas today? Reply YES to order!")} style={{background:"#25D366",color:"#fff",border:"none",borderRadius:9,padding:"7px 11px",fontWeight:700,fontSize:11,cursor:"pointer"}}>💬</button>
+              </div>
+              <div style={{display:"grid",gridTemplateColumns:"1fr 1fr 1fr",gap:7}}>
+                {[["📦","Orders",c.orders],["💰","Spend",fmt(c.spend)],["📅","Last Order",c.last]].map(([ic,lb,v])=>(
+                  <div key={lb} style={{background:"#f8fafc",borderRadius:10,padding:"9px",textAlign:"center"}}>
+                    <div style={{fontSize:14,marginBottom:2}}>{ic}</div>
+                    <div style={{fontWeight:800,fontSize:11,color:"#0f172a"}}>{v}</div>
+                    <div style={{fontSize:9,color:"#94a3b8",textTransform:"uppercase",letterSpacing:.3,marginTop:1}}>{lb}</div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          ))}
+        </>}
+
+        {tab==="riders"&&<>
+          <h2 style={{fontSize:17,fontWeight:900,margin:"0 0 4px",color:"#0f172a"}}>Riders ({RIDERS.length})</h2>
+          <p style={{fontSize:12,color:"#64748b",marginBottom:12}}>All riders cover Asaba and surrounding areas</p>
+          {activeOrd&&<button onClick={()=>{setGpsOrd(activeOrd);setShowGPS(true);}} style={{width:"100%",background:"linear-gradient(135deg,#1d4ed8,#4338ca)",border:"none",borderRadius:12,padding:12,color:"#fff",fontWeight:700,fontSize:13,cursor:"pointer",marginBottom:12}}>📍 Track Active Delivery — Live GPS</button>}
+          {RIDERS.map((r,i)=>{
+            const ac=orders.filter(o=>o.rider===r.name&&(o.status==="Confirmed"||o.status==="On the Way"));
+            const dn=orders.filter(o=>o.rider===r.name&&o.status==="Delivered");
+            const avgR=dn.filter(o=>o.rating).length?(dn.filter(o=>o.rating).reduce((s,o)=>s+o.rating,0)/dn.filter(o=>o.rating).length).toFixed(1):"—";
+            return(
+              <div key={r.name} className="card" style={{padding:13,marginBottom:9}}>
+                <div style={{display:"flex",alignItems:"center",gap:10,marginBottom:8}}>
+                  <div style={{width:42,height:42,borderRadius:12,background:"#fff7ed",display:"flex",alignItems:"center",justifyContent:"center",fontSize:20,border:"1.5px solid #fed7aa"}}>🏍️</div>
+                  <div style={{flex:1}}><div style={{fontWeight:800,fontSize:14,color:"#0f172a"}}>{r.name}</div><div style={{fontSize:11,color:"#64748b",marginTop:1}}>📞 {r.phone} · {r.area}</div><div style={{fontSize:10,color:"#94a3b8",marginTop:1}}>Zones: {r.zones.slice(0,3).join(", ")}{r.zones.length>3?"...":""}</div></div>
+                  <span style={{padding:"4px 9px",borderRadius:20,fontSize:10,fontWeight:700,background:r.active&&ac.length>0?"#dcfce7":r.active?"#dbeafe":"#fee2e2",color:r.active&&ac.length>0?"#14532d":r.active?"#1e40af":"#7f1d1d"}}>{r.active?(ac.length>0?"🟢 Active":"🔵 Ready"):"🔴 Off duty"}</span>
+                </div>
+                <div style={{display:"flex",gap:12,marginBottom:9,fontSize:11,color:"#64748b"}}>
+                  <span>📦 Active: <b style={{color:"#0f172a"}}>{ac.length}</b></span>
+                  <span>✅ Done: <b style={{color:"#0f172a"}}>{dn.length}</b></span>
+                  <span>⭐ <b style={{color:"#0f172a"}}>{avgR}</b></span>
+                </div>
+                <div style={{display:"flex",gap:7}}>
+                  <a href={"tel:"+r.phone} style={{flex:1,background:"#16a34a",color:"#fff",borderRadius:9,padding:"9px",fontWeight:700,fontSize:12,textDecoration:"none",textAlign:"center",display:"block"}}>📞 Call</a>
+                  <button onClick={()=>waOpen(r.phone,"Hi "+r.name+"! This is GasNow Asaba Admin. Please check the app for new delivery assignments in your zone. Thank you!")} style={{flex:1,background:"#25D366",color:"#fff",border:"none",borderRadius:9,padding:"9px",fontWeight:700,fontSize:12,cursor:"pointer"}}>💬 WhatsApp</button>
+                  {ac.length>0&&<button onClick={()=>{setGpsOrd({...ac[0],rider:r.name});setShowGPS(true);}} style={{flex:1,background:"#dbeafe",color:"#1e40af",border:"none",borderRadius:9,padding:"9px",fontWeight:700,fontSize:12,cursor:"pointer"}}>📍 GPS</button>}
+                </div>
+              </div>
+            );
+          })}
+        </>}
+
+        {tab==="comments"&&<>
+          <h2 style={{fontSize:17,fontWeight:900,margin:"0 0 4px",color:"#0f172a"}}>Customer Comments</h2>
+          <p style={{fontSize:12,color:"#64748b",marginBottom:14}}>{comments.filter(c=>!c.reply).length} awaiting reply · {comments.length} total</p>
+          {replyId!==null&&<div style={{position:"fixed",inset:0,background:"rgba(15,23,42,.65)",zIndex:800,display:"flex",alignItems:"flex-end",justifyContent:"center",backdropFilter:"blur(4px)"}} onClick={()=>{setReplyId(null);setReplyTxt("");}}>
+            <div className="slideUp" style={{background:"#fff",width:"100%",maxWidth:430,borderRadius:"24px 24px 0 0",padding:20}} onClick={e=>e.stopPropagation()}>
+              <div style={{fontWeight:800,fontSize:16,marginBottom:6,color:"#0f172a"}}>🎧 Reply as GasNow Asaba Support</div>
+              <div style={{background:"#f8fafc",borderRadius:10,padding:"10px 12px",fontSize:12,color:"#374151",marginBottom:14,border:"1px solid #e2e8f0"}}>"{comments.find(c=>c.id===replyId)?.msg}"</div>
+              <textarea value={replyTxt} onChange={e=>setReplyTxt(e.target.value)} placeholder="Type your official response..." style={{width:"100%",padding:"12px 14px",border:"1.5px solid #e2e8f0",borderRadius:12,fontSize:13,outline:"none",resize:"none",boxSizing:"border-box",minHeight:90,color:"#0f172a"}} rows={3}/>
+              <div style={{display:"flex",gap:8,marginTop:12}}>
+                <button onClick={()=>{setReplyId(null);setReplyTxt("");}} style={{flex:1,background:"#f1f5f9",border:"none",borderRadius:12,padding:"12px",fontWeight:700,fontSize:13,cursor:"pointer",color:"#374151"}}>Cancel</button>
+                <button onClick={()=>{if(!replyTxt.trim())return;setComments(p=>p.map(c=>c.id===replyId?{...c,reply:replyTxt.trim(),rTime:fmtDate()+" "+fmtTime()}:c));setReplyId(null);setReplyTxt("");tst("Reply sent! 🎧");}} style={{flex:2,background:BG,color:"#fff",border:"none",borderRadius:12,padding:"12px",fontWeight:800,fontSize:13,cursor:"pointer"}}>Send Official Reply 🎧</button>
+              </div>
+            </div>
+          </div>}
+          {comments.map(c=>(
+            <div key={c.id} className="card" style={{padding:14,marginBottom:10,border:!c.reply?"2px solid #fcd34d":"1px solid #f1f5f9"}}>
+              {!c.reply&&<div style={{background:"#fef9c3",borderRadius:8,padding:"4px 10px",marginBottom:8,fontSize:10,fontWeight:700,color:"#92400e",display:"inline-block"}}>⚠️ Needs Reply</div>}
+              <div style={{display:"flex",gap:10,marginBottom:c.reply?10:8}}>
+                <div style={{width:36,height:36,borderRadius:10,background:BG,color:"#fff",fontWeight:800,fontSize:14,display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0}}>{c.av}</div>
+                <div style={{flex:1}}><div style={{display:"flex",justifyContent:"space-between",marginBottom:3}}><span style={{fontWeight:800,fontSize:13,color:"#0f172a"}}>{c.author}</span><span style={{fontSize:10,color:"#94a3b8"}}>{c.time}</span></div><div style={{fontSize:13,color:"#374151",lineHeight:1.6}}>{c.msg}</div></div>
+              </div>
+              {c.reply&&<div style={{background:"linear-gradient(135deg,#f0fdf4,#dcfce7)",borderRadius:10,padding:"10px 12px",marginLeft:46,border:"1px solid #bbf7d0",marginBottom:9}}>
+                <div style={{display:"flex",justifyContent:"space-between",marginBottom:4}}><div style={{display:"flex",alignItems:"center",gap:5}}><span>🎧</span><b style={{fontSize:11,color:"#14532d"}}>GasNow Asaba Support</b><span style={{background:"#16a34a",color:"#fff",fontSize:8,fontWeight:800,padding:"1px 6px",borderRadius:20}}>Official</span></div><span style={{fontSize:10,color:"#94a3b8"}}>{c.rTime}</span></div>
+                <div style={{fontSize:12,color:"#166534",lineHeight:1.6}}>{c.reply}</div>
+              </div>}
+              <div style={{display:"flex",gap:7,marginTop:4}}>
+                <button onClick={()=>{setReplyId(c.id);setReplyTxt(c.reply||"");}} style={{background:c.reply?"#f1f5f9":BG,color:c.reply?"#374151":"#fff",border:"none",borderRadius:9,padding:"8px 14px",fontWeight:700,fontSize:12,cursor:"pointer"}}>{c.reply?"✏️ Edit Reply":"🎧 Reply"}</button>
+                <button onClick={()=>waOpen(SUPPORT,"Comment from "+c.author+": "+c.msg)} style={{background:"#dcfce7",color:"#14532d",border:"none",borderRadius:9,padding:"8px 12px",fontWeight:700,fontSize:12,cursor:"pointer"}}>💬 WA</button>
+              </div>
+            </div>
+          ))}
+        </>}
+
+        {tab==="pricing"&&<>
+          <h2 style={{fontSize:17,fontWeight:900,margin:"0 0 4px",color:"#0f172a"}}>Pricing Management</h2>
+          <p style={{fontSize:12,color:"#64748b",marginBottom:14}}>Set price per kg — all cylinder prices update instantly across Asaba.</p>
+          <div style={{background:"linear-gradient(135deg,#f0fdf4,#dcfce7)",border:"2px solid #86efac",borderRadius:16,padding:16,marginBottom:16}}>
+            <div style={{fontSize:10,color:"#14532d",fontWeight:800,textTransform:"uppercase",letterSpacing:.5,marginBottom:8}}>⛽ Market Price Per KG — Asaba</div>
+            <div style={{display:"flex",gap:10,alignItems:"center"}}>
+              <input type="number" style={{flex:1,padding:"12px 14px",border:"2px solid #86efac",borderRadius:12,fontSize:22,fontWeight:900,outline:"none",color:"#15803d",background:"#fff"}} value={ppk} onChange={e=>setPpk(Number(e.target.value))}/>
+              <span style={{fontSize:14,fontWeight:700,color:"#14532d"}}>/kg</span>
+            </div>
+            <div style={{fontSize:11,color:"#14532d",marginTop:8,opacity:.7}}>Changing this updates all cylinder prices instantly</div>
+          </div>
+          <div style={{fontSize:10,fontWeight:700,color:"#64748b",textTransform:"uppercase",letterSpacing:.5,marginBottom:10}}>Auto-Calculated Prices</div>
+          {CYLS.map(g=>(
+            <div key={g.id} className="card" style={{padding:"12px 14px",marginBottom:8,display:"flex",alignItems:"center",gap:11,border:g.prem?"2px solid "+BRAND:"1px solid #f1f5f9"}}>
+              <span style={{fontSize:24}}>{g.icon}</span>
+              <div style={{flex:1}}><div style={{fontWeight:800,fontSize:13,color:"#0f172a"}}>{g.lb} Cylinder</div><div style={{fontSize:10,color:"#94a3b8",marginTop:1}}>{fmt(ppk)} × {g.kg}kg{g.prem&&<span style={{color:BRAND,fontWeight:700}}> · FREE delivery + 2% credit</span>}</div></div>
+              <div style={{fontWeight:900,fontSize:16,color:BRAND}}>{fmt(calcP(g.kg,ppk))}</div>
+            </div>
+          ))}
+          <div style={{background:"#fff7ed",border:"1px solid #fed7aa",borderRadius:12,padding:"12px 14px",marginTop:10}}>
+            <div style={{fontSize:11,fontWeight:800,color:"#92400e",marginBottom:8,textTransform:"uppercase",letterSpacing:.3}}>🎟️ Active Promo Codes</div>
+            {Object.entries(PROMOS).map(([code,p])=>(
+              <div key={code} style={{display:"flex",justifyContent:"space-between",fontSize:12,padding:"5px 0",borderBottom:"1px solid #fed7aa"}}><b style={{color:BRAND_DARK,fontFamily:"monospace"}}>{code}</b><span style={{color:"#78350f"}}>{p.label}</span></div>
+            ))}
+          </div>
+        </>}
+
+        {tab==="analytics"&&<>
+          <h2 style={{fontSize:17,fontWeight:900,margin:"0 0 12px",color:"#0f172a"}}>Analytics</h2>
+          <BarChart/>
+          <div style={{marginTop:12,display:"grid",gridTemplateColumns:"1fr 1fr",gap:9,marginBottom:12}}>
+            {[["🏆","Best Day","Saturday","₦64,000","#ea580c"],["📦","Avg Order",fmt(Math.round(stats.rev/Math.max(1,delivered.length))),"per order","#3b82f6"],["⭐","Rating",avgRat+"/5","avg score","#f59e0b"],["👥","Customers",customers.length,"in Asaba","#16a34a"]].map(([ic,t,v,sub,c])=>(
+              <div key={t} className="card" style={{padding:12,borderLeft:"3px solid "+c}}>
+                <div style={{fontSize:18,marginBottom:3}}>{ic}</div>
+                <div style={{fontSize:10,color:"#64748b",fontWeight:700,textTransform:"uppercase",letterSpacing:.3,marginBottom:2}}>{t}</div>
+                <div style={{fontSize:16,fontWeight:900,color:c}}>{v}</div>
+                <div style={{fontSize:10,color:"#94a3b8"}}>{sub}</div>
+              </div>
+            ))}
+          </div>
+          <div className="card" style={{padding:14,marginBottom:12}}>
+            <div style={{fontSize:11,fontWeight:800,color:"#0f172a",marginBottom:12,textTransform:"uppercase",letterSpacing:.3}}>📦 Orders by Cylinder Size</div>
+            {CYLS.map(g=>{const cnt=orders.filter(o=>o.kg===g.kg).length;const pct=Math.round(cnt/Math.max(1,orders.length)*100);return(
+              <div key={g.id} style={{marginBottom:10}}>
+                <div style={{display:"flex",justifyContent:"space-between",fontSize:12,marginBottom:4,color:"#374151"}}><span>{g.icon} {g.lb}</span><span style={{fontWeight:700}}>{cnt} orders ({pct}%)</span></div>
+                <div className="bar"><div className="bar-fill" style={{width:pct+"%"}}/></div>
+              </div>
+            );})}
+          </div>
+          <div className="card" style={{padding:14}}>
+            <div style={{fontSize:11,fontWeight:800,color:"#0f172a",marginBottom:12,textTransform:"uppercase",letterSpacing:.3}}>🏍️ Rider Performance — Asaba</div>
+            {RIDERS.filter(r=>r.active).map(r=>{const done=orders.filter(o=>o.rider===r.name&&o.status==="Delivered").length;const pct=Math.max(3,Math.round(done/Math.max(1,orders.length)*100));return(
+              <div key={r.name} style={{marginBottom:10}}>
+                <div style={{display:"flex",justifyContent:"space-between",fontSize:12,marginBottom:4,color:"#374151"}}><span>🏍️ {r.name} <span style={{color:"#94a3b8",fontSize:10}}>({r.area})</span></span><span style={{fontWeight:700}}>{done} deliveries</span></div>
+                <div className="bar"><div className="bar-fill" style={{width:pct+"%"}}/></div>
+              </div>
+            );})}
+          </div>
+        </>}
+      </div>
+    </div>
+  );
+}
+
+function App(){
+  const [user,setUser]=useState(null);
+  const [ppk,setPpk]=useState(800);
+  const [orders,setOrders]=useState(INIT_ORDERS);
+  const [comments,setComments]=useState(INIT_COMMENTS);
+  if(!user)return <Auth onLogin={setUser}/>;
+  if(user.role==="admin")return <Admin onLogout={()=>setUser(null)} orders={orders} setOrders={setOrders} ppk={ppk} setPpk={setPpk} comments={comments} setComments={setComments}/>;
+  return <Customer user={user} onLogout={()=>setUser(null)} orders={orders} setOrders={setOrders} ppk={ppk} comments={comments} setComments={setComments}/>;
+}
+
+ReactDOM.createRoot(document.getElementById("root")).render(<App/>);
+</script>
+</body>
+</html>
